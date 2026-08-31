@@ -73,32 +73,32 @@ os Insights.
 
 ## Contexto do funil
 
-**Funil de High Ticket (<<PREENCHER: nome do cliente>>)** — <<PREENCHER: descrição
-curta do cliente/oferta>>. Funil de captura via WhatsApp com venda 1:1 (comercial
-fecha por conversa/reunião, não carrinho direto): o anúncio no Meta Ads leva
-a uma página de captura com botão do WhatsApp; ao clicar, o lead chama no
-WhatsApp Business do cliente e o webhook de mensageria dispara na 1ª mensagem,
-que cai na aba **Conversas** (fonte principal de leads deste dashboard). O
-critério de qualificação (MQL) é <<PREENCHER: critério de MQL do cliente, ex.
-"o lead ser médico">> — se qualificado, segue a conversa com o comercial até a
-venda (registrada na aba de Compradores e cruzada de volta ao anúncio por telefone).
+**Funil de Sessão Estratégica (Lucas Nigro — Método RaL)** — captação de leads
+para a formação "Consultores Financeiros Empresariais | Método RaL", via
+formulário de captura (não é WhatsApp/mensageria): o anúncio no Meta Ads leva a
+uma landing page com formulário; ao preencher, o lead cai direto na aba
+**Leads** (fonte **única** de leads deste dashboard — não há aba Conversas
+nesse cliente), já com a campanha/conjunto/anúncio de origem via
+`utm_campaign`/`utm_medium`/`utm_content`. O critério de qualificação (MQL) é a
+coluna `classificacao` (**coluna O**) == `"QUALIFICADO"` — a análise principal
+(macro) do dashboard é sempre **Leads → MQLs → Vendas** e o **custo de cada
+etapa** (CPL, CPMQL, CAC), em todos os gráficos/tabelas/KPIs.
 
 ```
-Impressões → Cliques/abertura do WhatsApp → Leads → MQLs → Vendas → Faturamento
+Impressões → Cliques → Leads → MQLs → Vendas → Faturamento
 ```
 
-- **MQL** = coluna de qualificação (<<PREENCHER: nome da coluna de MQL>>) == "Sim" (ver `build.py` → `is_medico`).
-- **Agendamento** = o lead qualificado marcou horário de reunião com o comercial.
-- **Reunião Realizada** = a reunião de fato aconteceu (o lead compareceu). O
-  inverso disso é o **No‑Show** (agendou e não compareceu) — a métrica de alerta
-  mais importante entre Agendamento e Venda.
+- **MQL** = coluna `classificacao` (aba Leads) == `"QUALIFICADO"` (ver
+  `build.py` → `is_qualificado`).
+- **Venda** = registrada na aba **Vendas**, cruzada de volta ao anúncio de
+  origem por `lead_id` (fallback por telefone) — já conectada nesse cliente.
 
-> **Estado atual dos dados:** enquanto só houver mídia paga × Leads, o funil
-> vai até **MQL**. As etapas seguintes (Agendamentos, Reuniões Realizadas, Vendas,
-> Faturamento) e as métricas derivadas aparecem como “-” até chegar a lista do
-> comercial/vendas. Quando os campos `agendamentos`/`reunioes`/`vendas`/
-> `fat` forem somados por linha em `buildAgg/daily/totals` (`build/app.js`),
-> **toda a UI acende sozinha** (funil, tabelas, Top/Piores).
+> **Estado atual dos dados:** o funil vai até **Venda/Faturamento** (Leads,
+> MQLs e Vendas já cruzados). As etapas **Agendamento** e **Reunião Realizada**
+> não existem nesse funil (venda direta pelo formulário/checkout, sem
+> agendamento comercial) — aparecem como "-" e não são esperadas para esse
+> cliente, ao contrário do gap "temporário" que o template genérico documenta
+> para outros clientes.
 
 ## Fórmulas fundamentais
 

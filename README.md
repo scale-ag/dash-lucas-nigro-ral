@@ -1,13 +1,14 @@
-# Dashboard de Captura de Leads · <<PREENCHER: nome do cliente>>
+# Dashboard de Captura de Leads · Lucas Nigro (RAL)
 
-Dashboard **100% na nuvem** do Funil de High Ticket de **<<PREENCHER: nome do
-cliente>>** que cruza a aba **Conversas** (leads via WhatsApp/mensageria) com o
-investimento de mídia paga (**Meta Ads**) e com a lista de **Compradores**,
-calcula os **Leads Qualificados (MQLs)** e as **Vendas/Faturamento** atribuídos
-por anúncio, e é publicada no **GitHub Pages**. Reconstrói sozinha a cada
-~30 min, disparada pelo **cron-job.org** — sem depender de nenhum PC ligado.
+Dashboard **100% na nuvem** do Funil de Sessão Estratégica de **Lucas Nigro**
+(Método RaL) que cruza a aba **Leads** (fonte única de leads, com atribuição
+de campanha/conjunto/anúncio via UTMs) com o investimento de mídia paga
+(**Meta Ads**) e com a aba **Vendas**, calcula os **Leads Qualificados
+(MQLs)** e as **Vendas/Faturamento** atribuídos por anúncio, e é publicada no
+**GitHub Pages**. Reconstrói sozinha a cada ~30 min, disparada pelo
+**cron-job.org** — sem depender de nenhum PC ligado.
 
-**URL pública:** `https://<<PREENCHER: owner do GitHub>>.github.io/<<PREENCHER: nome do repositório>>/`
+**URL pública:** `https://scale-ag.github.io/dash-lucas-nigro-ral/`
 
 ---
 
@@ -23,22 +24,23 @@ por anúncio, e é publicada no **GitHub Pages**. Reconstrói sozinha a cada
 
 ## Critério de Lead Qualificado (MQL)
 
-Coluna de qualificação do cliente (<<PREENCHER: nome da coluna de MQL, ex. "É médico?">>)
-== "Sim". Lógica em `build.py` → `is_medico` (renomeie/ajuste ao critério do cliente).
+Coluna `classificacao` da aba Leads (coluna O) == `"QUALIFICADO"` (o valor
+oposto é `"DESQUALIFICADO"`). Lógica em `build.py` → `is_qualificado`.
 
 ## Fontes de dados (somente leitura)
 
-Planilha central `<<PREENCHER: nome da planilha central>>`
-(`<<PREENCHER: SPREADSHEET_ID>>`):
+Duas planilhas, buscadas via **export CSV público por nome de aba**
+(`gviz/tq?tqx=out:csv&sheet=...`), sem depender de gid:
 
-| Aba | gid | Uso |
-|-----|-----|-----|
-| Conversas (fonte principal) | `<<PREENCHER: GID_CONVERSAS>>` | fonte **principal** de leads (webhook/mensageria) — usada em todos os gráficos/cards/tabelas |
-| Leads (legado) | `<<PREENCHER: GID_LEADS>>` | popup/form antigo — só contada (total), não entra em cálculo algum |
-| Meta Ads | `<<PREENCHER: GID_META>>` | gasto, impressões, cliques |
-| New Subscriptions (Compradores) | `<<PREENCHER: GID_SALES>>` | cruzada por telefone com a Conversas → Vendas/Faturamento por anúncio |
+**Planilha do Funil** (`1j3EQE4zbRlUVAKyDPTmlnTDP0Jlvw-enQyMPR2LXjfk`):
 
-O build lê essas abas via **export CSV público** (`.../export?format=csv&gid=...`).
+| Aba | Uso |
+|-----|-----|
+| Leads | fonte **única** de leads — cada linha já traz `utm_campaign`/`utm_medium`/`utm_content` = Campanha/Conjunto/Anúncio |
+| Vendas | compradores — cruzada com Leads por `lead_id` (fallback por telefone) → Vendas/Faturamento por anúncio |
+
+**Planilha Meta Ads** (`1xb5itNu9_No6keCKHyzG7qIPobT46BqfmJ_rP0v4h8c`), aba **Página 1**: gasto, impressões, cliques, landing page views.
+
 **Nada é escrito de volta** nas planilhas.
 
 ---
@@ -67,8 +69,8 @@ aberta — sempre pegando a versão mais nova.
 ```bash
 python build/build.py --out dist/index.html            # busca os CSVs ao vivo
 # ou, com arquivos locais para teste:
-python build/build.py --conversas-file conversas.csv --meta-file meta.csv \
-  --sales-file compradores.csv --leads-file leads.csv --out dist/index.html
+python build/build.py --leads-file leads.csv --meta-file meta.csv \
+  --sales-file vendas.csv --out dist/index.html
 ```
 
 ---
