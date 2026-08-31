@@ -112,9 +112,13 @@ campanha do Meta. `log_unmatched_sales()` loga no build quantas vendas ficaram
 sem anúncio de origem.
 
 ### Imposto da mídia paga
-`TAX_FACTOR = 1.0` em `build.py` — cliente sem imposto/taxa adicional sobre a
-conta de mídia. O toggle "Imposto Meta" fica **ativo por padrão**
-(`STATE.tax=true` em `app.js`), mas com fator 1.0 não altera nenhum valor.
+`TAX_FACTOR = 1.1385` em `build.py` — imposto de **13,85%** sobre o gasto de
+mídia (Meta Ads). O toggle "Imposto Meta" fica **ativo por padrão**
+(`STATE.tax=true` em `app.js`) e `taxf()` multiplica `a.sp` (gasto) por esse
+fator em todo lugar que deriva de gasto — Gasto, CPL, CPMQL, CAC — em todos
+os gráficos/tabelas (`app.js`: KPIs, combinado diário, hierarquia de
+campanha/conjunto/anúncio, Top/Piores Anúncios). Desativar o toggle volta ao
+gasto bruto (sem imposto).
 
 ### Convenções de campanha (do cliente)
 Todas as campanhas usam o prefixo `MAIN_PRODUCT_PREFIX = "RAL"`, sem filtrar por

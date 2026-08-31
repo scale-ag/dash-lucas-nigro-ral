@@ -63,7 +63,7 @@ MAIN_PRODUCT = "Funil de Sessão Estratégica"
 MAIN_PRODUCT_PREFIX = "RAL"
 
 BRT = timezone(timedelta(hours=-3))   # horario de Brasilia (exibicao)
-TAX_FACTOR = 1.0   # cliente sem imposto/taxa adicional sobre a conta de mídia
+TAX_FACTOR = 1.1385   # imposto de 13,85% sobre o gasto de mídia (Meta Ads)
 
 # --------------------------------------------------------------------------- #
 # Regras da aba Relatório (Top/Piores anúncios)
