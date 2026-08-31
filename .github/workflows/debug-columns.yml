@@ -1,0 +1,63 @@
+name: Debug Columns (temporario)
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspecionar cabecalhos das planilhas
+        run: |
+          python3 - <<'EOF'
+          import urllib.request, urllib.parse, csv, io
+
+          sheets = [
+              ("META (Meta Ads)", "1xb5itNu9_No6keCKHyzG7qIPobT46BqfmJ_rP0v4h8c", "Página 1"),
+              ("LEADS", "1j3EQE4zbRlUVAKyDPTmlnTDP0Jlvw-enQyMPR2LXjfk", "Leads"),
+              ("VENDAS", "1j3EQE4zbRlUVAKyDPTmlnTDP0Jlvw-enQyMPR2LXjfk", "Vendas"),
+          ]
+
+          for name, sid, sheet in sheets:
+              url = f"https://docs.google.com/spreadsheets/d/{sid}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote(sheet)}"
+              print(f"===== {name} :: aba '{sheet}' =====")
+              print(f"URL: {url}")
+              try:
+                  req = urllib.request.Request(url, headers={"User-Agent": "dash-debug-bot/1.0"})
+                  with urllib.request.urlopen(req, timeout=30) as resp:
+                      raw = resp.read().decode("utf-8", errors="replace")
+                  rows = list(csv.reader(io.StringIO(raw)))
+                  print(f"total_rows={len(rows)}")
+                  if rows:
+                      print("HEADER:")
+                      for i, col in enumerate(rows[0]):
+                          print(f"  [{i}] {col!r}")
+                  print("SAMPLE_ROWS:")
+                  for r in rows[1:6]:
+                      print(" ", r)
+              except Exception as e:
+                  print(f"ERRO ao buscar {name}: {e}")
+              print()
+
+          # Campanhas unicas do Meta Ads, pra identificar sigla de funil / prefixo
+          try:
+              url = f"https://docs.google.com/spreadsheets/d/1xb5itNu9_No6keCKHyzG7qIPobT46BqfmJ_rP0v4h8c/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote('Página 1')}"
+              req = urllib.request.Request(url, headers={"User-Agent": "dash-debug-bot/1.0"})
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  raw = resp.read().decode("utf-8", errors="replace")
+              rows = list(csv.reader(io.StringIO(raw)))
+              header = rows[0]
+              idx = None
+              for i, col in enumerate(header):
+                  if "campaign name" in col.strip().lower():
+                      idx = i
+                      break
+              print("===== CAMPANHAS UNICAS (Campaign Name) =====")
+              if idx is not None:
+                  names = sorted({r[idx] for r in rows[1:] if len(r) > idx and r[idx].strip()})
+                  for n in names:
+                      print(" ", n)
+              else:
+                  print("Coluna 'Campaign Name' nao encontrada. Header:", header)
+          except Exception as e:
+              print(f"ERRO ao listar campanhas: {e}")
+          EOF
