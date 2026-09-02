@@ -1,0 +1,60 @@
+name: Debug Quiz Campaign 2 (temporario)
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspecionar adset/ad names por quiz/whatsapp
+        run: |
+          python3 - <<'EOF'
+          import urllib.request, urllib.parse, csv, io
+
+          def fetch(sid, sheet):
+              url = f"https://docs.google.com/spreadsheets/d/{sid}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote(sheet)}"
+              req = urllib.request.Request(url, headers={"User-Agent": "dash-debug-bot/1.0"})
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  raw = resp.read().decode("utf-8", errors="replace")
+              return list(csv.reader(io.StringIO(raw)))
+
+          leads = fetch("1j3EQE4zbRlUVAKyDPTmlnTDP0Jlvw-enQyMPR2LXjfk", "Leads")
+          header = leads[0]
+          i_id = header.index("id")
+          i_created = header.index("criado_em")
+          i_name = header.index("nome")
+          i_phone = header.index("whatsapp")
+          i_adset = header.index("utm_medium")
+          i_ad = header.index("utm_content")
+          i_camp = header.index("utm_campaign")
+
+          print("===== utm_medium (adset) unicos =====")
+          for c in sorted({r[i_adset] for r in leads[1:] if len(r)>i_adset and r[i_adset].strip()}):
+              print(" ", repr(c))
+          print("\n===== utm_content (ad) unicos =====")
+          for c in sorted({r[i_ad] for r in leads[1:] if len(r)>i_ad and r[i_ad].strip()}):
+              print(" ", repr(c))
+
+          print("\n===== leads cujo adset/ad/campaign contem 'quiz' ou 'whatsapp'/'wpp'/'zap' =====")
+          for row in leads[1:]:
+              if not any((c or "").strip() for c in row): continue
+              blob = (row[i_adset]+" "+row[i_ad]+" "+row[i_camp]).lower()
+              if "quiz" in blob or "whatsapp" in blob or "wpp" in blob or "zap" in blob:
+                  print(f"id={row[i_id]} nome={row[i_name]!r:25} criado_em={row[i_created]!r} adset={row[i_adset]!r} ad={row[i_ad]!r} camp={row[i_camp]!r}")
+
+          print("\n===== TODOS OS LEADS (ultimos 30), pra ver o quadro completo =====")
+          rows_sorted = sorted([r for r in leads[1:] if any((c or "").strip() for c in r)], key=lambda r: r[i_created])
+          for row in rows_sorted[-30:]:
+              print(f"id={row[i_id][:8]} criado_em={row[i_created]!r:35} nome={row[i_name]!r:25} adset={row[i_adset]!r} ad={row[i_ad]!r} camp={row[i_camp]!r}")
+
+          meta = fetch("1xb5itNu9_No6keCKHyzG7qIPobT46BqfmJ_rP0v4h8c", "Página 1")
+          mheader = meta[0]
+          i_madset = mheader.index("Ad Set Name")
+          i_mad = mheader.index("Ad Name")
+          print("\n===== META Ad Set Name unicos =====")
+          for c in sorted({r[i_madset] for r in meta[1:] if len(r)>i_madset and r[i_madset].strip()}):
+              print(" ", repr(c))
+          print("\n===== META Ad Name unicos =====")
+          for c in sorted({r[i_mad] for r in meta[1:] if len(r)>i_mad and r[i_mad].strip()}):
+              print(" ", repr(c))
+          EOF
