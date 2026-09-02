@@ -322,16 +322,16 @@ def build_purchases(sales_rows):
 def log_unmatched_sales(matched: int, total: int, unmatched: list[dict]):
     """Diagnóstico (stderr, não afeta a saída): compras da aba Vendas cujo
     lead_id não bate com nenhum lead E cujo telefone (canonicalizado) também
-    não bate com nenhum lead da aba Leads. Essas vendas AINDA entram na dash
-    (contam nos totais / Visão Geral), só ficam SEM atribuição de anúncio
-    ("(sem campanha)") — este log serve pra dimensionar quanta receita fica
-    sem origem e conferir se é compra por outro canal (esperado) ou algum
-    lead_id/telefone ainda divergente."""
+    não bate com nenhum lead da aba Leads. Essas vendas NÃO entram na dash
+    (nem nos totais, nem na Visão Geral) — provavelmente compra de outro
+    produto/origem que também cai na aba Vendas. Este log serve pra conferir
+    quanto fica de fora e detectar lead_id/telefone genuinamente divergente
+    (que deveria ter casado e não casou)."""
     print(f"  vendas atribuídas a anúncio: {matched}/{total} (cruzamento lead_id + telefone canônico Vendas × Leads)",
           file=sys.stderr)
     if not unmatched:
         return
-    print(f"  {len(unmatched)} compra(s) SEM anúncio de origem (entram nos totais como \"(sem campanha)\"):",
+    print(f"  {len(unmatched)} compra(s) SEM lead correspondente — EXCLUÍDAS da dash (fora deste funil):",
           file=sys.stderr)
     for p in unmatched:
         ph = p["phone"]
@@ -398,25 +398,24 @@ def process(leads_rows, meta_rows, sales_rows):
         })
 
     # Vendas: um registro POR COMPRA (nunca agregada), na data real da compra
-    # ("pago_em"). TODA venda confirmada entra (aparece na Visão Geral e nos
-    # totais) — só a quebra por campanha do Meta perde as que não casam com
-    # nenhum lead. camp/adset/ad vem do lead de origem (por lead_id, com
-    # fallback por telefone canônico).
+    # ("pago_em"). Só entram vendas que casam com um lead deste funil — por
+    # lead_id (FK direta) ou, na ausência, por telefone canônico. Uma venda
+    # sem lead_id E sem telefone batendo não tem como ter vindo de um lead
+    # capturado por este funil (decisão do cliente: a aba Vendas pode conter
+    # compras de outras origens/produtos) — fica de fora da dash inteira, não
+    # só da quebra por campanha do Meta. A aba Vendas em si nunca é alterada.
     purchases = build_purchases(sales_rows)
     sales = []
-    NO_ATTRIB = {"src": "org", "camp": "(sem campanha)", "adset": "(sem conjunto)",
-                 "ad": "(sem anúncio)", "d": None}
     matched = 0
     unmatched = []
     for p in purchases:
         attrib = id_attrib.get(p["lead_id"]) if p["lead_id"] else None
         if attrib is None:
             attrib = phone_attrib.get(canon_phone(p["phone"]))
-        if attrib is not None:
-            matched += 1
-        else:
-            attrib = NO_ATTRIB
+        if attrib is None:
             unmatched.append(p)
+            continue
+        matched += 1
         sales.append({
             "d": p["d"] or attrib["d"],
             "src": attrib["src"],

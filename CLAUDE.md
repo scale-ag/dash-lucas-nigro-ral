@@ -104,12 +104,13 @@ próprio em `DATA.sales[]` (`{d, camp, adset, ad, vendas:1, fat, receita}`) com 
 `metaActive()`, e os três arrays (`fL`/`fM`/`fS`) se propagam juntos em
 `buildAgg`/`daily`/`totals`.
 
-**TODA venda confirmada entra na dash** (regra geral: "todas as vendas entram
-na Visão Geral; só as atribuídas ao Meta entram na aba de mídia paga"). Quando
-nem `lead_id` nem telefone batem, a venda **ainda conta nos totais/Visão
-Geral**, porém como `(sem campanha)` / `src="org"` — some apenas da quebra por
-campanha do Meta. `log_unmatched_sales()` loga no build quantas vendas ficaram
-sem anúncio de origem.
+**Só entra na dash a venda que casa com um lead deste funil** (por `lead_id`
+ou, na ausência, por telefone canônico) — decisão do cliente: a aba Vendas
+pode ter compras de outra origem/produto que não vieram deste funil, e essas
+**não devem contar em nenhum total** (nem Visão Geral, nem mídia paga). Uma
+venda sem `lead_id` e sem telefone batendo é **excluída da dash inteira**
+(a aba Vendas em si nunca é alterada — só a leitura ignora essa linha).
+`log_unmatched_sales()` loga no build quantas vendas ficaram de fora.
 
 ### Imposto da mídia paga
 `TAX_FACTOR = 1.1385` em `build.py` — imposto de **13,85%** sobre o gasto de
