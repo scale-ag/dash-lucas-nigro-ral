@@ -155,6 +155,29 @@ def parse_date(v: str) -> str | None:
     return None
 
 
+def parse_date_brt(v: str) -> str | None:
+    """Como parse_date(), mas para timestamps COM FUSO (ISO-8601, ex.
+    "2026-09-01T01:25:15+00:00" ou terminado em "Z") — CONVERTE para o fuso de
+    Brasília (BRT, UTC-3) antes de extrair a data. Essencial pra bater com o
+    Meta Ads, que reporta "Day" no fuso local da conta (BRT): um lead/venda
+    registrado às 23h de um dia em BRT já é madrugada do dia seguinte em UTC,
+    e sem essa conversão ele "vaza" pro dia errado (e pro período errado nos
+    filtros). Strings sem hora/fuso (datas puras, ex. o "Day" do Meta) não têm
+    o que converter — cai no parse_date() normal."""
+    if not v:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            return dt.astimezone(BRT).strftime("%Y-%m-%d")
+    except ValueError:
+        pass
+    return parse_date(s)
+
+
 def is_test_lead(rowtext: str) -> bool:
     return "<test lead" in rowtext.lower()
 
@@ -288,7 +311,7 @@ def build_purchases(sales_rows):
         out.append({
             "lead_id": cell(row, idx["lead_id"]),
             "phone": norm_phone(cell(row, idx["phone"])),
-            "d": parse_date(cell(row, idx["date"])),
+            "d": parse_date_brt(cell(row, idx["date"])),
             "fat": valor,
             "receita": valor,
             "nm": cell(row, idx["name"]),
@@ -336,7 +359,7 @@ def process(leads_rows, meta_rows, sales_rows):
     # template generico, aqui aplicada sobre a propria aba Leads).
     rows_sorted = sorted(
         [r for r in leads_rows[1:] if any((c or "").strip() for c in r)],
-        key=lambda r: parse_date(cell(r, lidx["created"])) or "",
+        key=lambda r: parse_date_brt(cell(r, lidx["created"])) or "",
     )
     id_attrib: dict[str, dict] = {}
     phone_attrib: dict[str, dict] = {}
@@ -349,7 +372,7 @@ def process(leads_rows, meta_rows, sales_rows):
         camp = campaign_raw if campaign_valid else "(sem campanha)"
         adset = cell(row, lidx["adset"]) if campaign_valid else "(sem conjunto)"
         ad = cell(row, lidx["ad"]) if campaign_valid else "(sem anúncio)"
-        lead_date = parse_date(cell(row, lidx["created"]))
+        lead_date = parse_date_brt(cell(row, lidx["created"]))
         lead_id = cell(row, lidx["id"])
         phone = canon_phone(cell(row, lidx["phone"]))
         attrib = {"src": src, "camp": camp, "adset": adset, "ad": ad, "d": lead_date}
