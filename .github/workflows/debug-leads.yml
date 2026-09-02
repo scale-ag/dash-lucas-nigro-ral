@@ -1,0 +1,86 @@
+name: Debug Leads (temporario)
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspecionar leads recentes (criado_em, campanha) e Meta Day
+        run: |
+          python3 - <<'EOF'
+          import urllib.request, urllib.parse, csv, io
+          from datetime import datetime, timezone, timedelta
+
+          BRT = timezone(timedelta(hours=-3))
+
+          def fetch(sid, sheet):
+              url = f"https://docs.google.com/spreadsheets/d/{sid}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote(sheet)}"
+              req = urllib.request.Request(url, headers={"User-Agent": "dash-debug-bot/1.0"})
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  raw = resp.read().decode("utf-8", errors="replace")
+              return list(csv.reader(io.StringIO(raw)))
+
+          leads = fetch("1j3EQE4zbRlUVAKyDPTmlnTDP0Jlvw-enQyMPR2LXjfk", "Leads")
+          header = leads[0]
+          print("LEADS header:", header)
+          i_created = header.index("criado_em")
+          i_camp = header.index("utm_campaign")
+          i_id = header.index("id")
+          i_name = header.index("nome")
+
+          print("\n===== TODOS OS LEADS de 31/08 a 02/09 (criado_em cru + data UTC vs BRT) =====")
+          for row in leads[1:]:
+              if not any((c or "").strip() for c in row):
+                  continue
+              raw_created = row[i_created]
+              if not raw_created:
+                  continue
+              utc_date = raw_created[:10]
+              if utc_date not in ("2026-08-31", "2026-09-01", "2026-09-02"):
+                  continue
+              try:
+                  s2 = raw_created.replace("Z", "+00:00")
+                  dt = datetime.fromisoformat(s2)
+                  if dt.tzinfo is None:
+                      dt = dt.replace(tzinfo=timezone.utc)
+                  brt_date = dt.astimezone(BRT).strftime("%Y-%m-%d")
+              except Exception as e:
+                  brt_date = f"ERRO:{e}"
+              flag = "  <<< UTC != BRT >>>" if brt_date != utc_date else ""
+              print(f"id={row[i_id][:8]} nome={row[i_name]!r:30} criado_em={raw_created!r:35} utm_campaign={row[i_camp]!r:55} UTC_date={utc_date} BRT_date={brt_date}{flag}")
+
+          print("\n===== Contagem por data (UTC bruto, como build.py faz hoje) =====")
+          from collections import Counter
+          cu = Counter()
+          cb = Counter()
+          for row in leads[1:]:
+              if not any((c or "").strip() for c in row):
+                  continue
+              raw_created = row[i_created]
+              if not raw_created:
+                  continue
+              utc_date = raw_created[:10]
+              cu[utc_date] += 1
+              try:
+                  s2 = raw_created.replace("Z", "+00:00")
+                  dt = datetime.fromisoformat(s2)
+                  if dt.tzinfo is None:
+                      dt = dt.replace(tzinfo=timezone.utc)
+                  brt_date = dt.astimezone(BRT).strftime("%Y-%m-%d")
+              except Exception:
+                  brt_date = utc_date
+              cb[brt_date] += 1
+          for d in sorted(set(list(cu.keys())+list(cb.keys()))):
+              if d >= "2026-08-30":
+                  print(f"  {d}: UTC={cu.get(d,0)}  BRT={cb.get(d,0)}")
+
+          print("\n===== META header + linhas Day 31/08-02/09 =====")
+          meta = fetch("1xb5itNu9_No6keCKHyzG7qIPobT46BqfmJ_rP0v4h8c", "Página 1")
+          mheader = meta[0]
+          print("META header:", mheader)
+          i_day = mheader.index("Day")
+          for row in meta[1:]:
+              if row[i_day] in ("2026-08-31","2026-09-01","2026-09-02"):
+                  print(" ", row)
+          EOF
