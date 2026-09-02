@@ -1,0 +1,74 @@
+name: Debug Quiz Campaign (temporario)
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspecionar leads/meta da campanha de quiz
+        run: |
+          python3 - <<'EOF'
+          import urllib.request, urllib.parse, csv, io
+          from datetime import datetime, timezone, timedelta
+
+          BRT = timezone(timedelta(hours=-3))
+
+          def fetch(sid, sheet):
+              url = f"https://docs.google.com/spreadsheets/d/{sid}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote(sheet)}"
+              req = urllib.request.Request(url, headers={"User-Agent": "dash-debug-bot/1.0"})
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  raw = resp.read().decode("utf-8", errors="replace")
+              return list(csv.reader(io.StringIO(raw)))
+
+          leads = fetch("1j3EQE4zbRlUVAKyDPTmlnTDP0Jlvw-enQyMPR2LXjfk", "Leads")
+          header = leads[0]
+          print("LEADS header:", header)
+          i_id = header.index("id")
+          i_created = header.index("criado_em")
+          i_name = header.index("nome")
+          i_phone = header.index("whatsapp")
+          i_camp = header.index("utm_campaign")
+          i_adset = header.index("utm_medium")
+          i_ad = header.index("utm_content")
+          i_source = header.index("utm_source")
+
+          print("\n===== TODAS AS CAMPANHAS UNICAS (utm_campaign) na aba Leads =====")
+          camps = sorted({row[i_camp] for row in leads[1:] if len(row) > i_camp and row[i_camp].strip()})
+          for c in camps:
+              print(" ", repr(c))
+
+          print("\n===== LEADS cujo utm_campaign contem 'quiz' (case-insensitive) =====")
+          quiz_leads = []
+          for row in leads[1:]:
+              if not any((c or "").strip() for c in row):
+                  continue
+              camp = row[i_camp] if len(row) > i_camp else ""
+              if "quiz" in camp.lower():
+                  quiz_leads.append(row)
+                  print(f"id={row[i_id]} nome={row[i_name]!r:30} criado_em={row[i_created]!r:35} phone={row[i_phone]!r:20} source={row[i_source]!r:15} campaign={camp!r} adset={row[i_adset]!r} ad={row[i_ad]!r}")
+          print(f"\nTotal leads com 'quiz' no utm_campaign: {len(quiz_leads)}")
+
+          # checar duplicados por telefone entre os leads de quiz
+          from collections import Counter
+          phones = Counter(row[i_phone] for row in quiz_leads)
+          dups = {p: n for p, n in phones.items() if n > 1}
+          if dups:
+              print("\n===== TELEFONES DUPLICADOS dentro dos leads de quiz =====")
+              for p, n in dups.items():
+                  print(f"  {p}: {n}x")
+
+          print("\n===== META: campanhas unicas (Campaign Name) =====")
+          meta = fetch("1xb5itNu9_No6keCKHyzG7qIPobT46BqfmJ_rP0v4h8c", "Página 1")
+          mheader = meta[0]
+          i_mcamp = mheader.index("Campaign Name")
+          mcamps = sorted({row[i_mcamp] for row in meta[1:] if len(row) > i_mcamp and row[i_mcamp].strip()})
+          for c in mcamps:
+              print(" ", repr(c))
+
+          print("\n===== META: linhas de campanhas com 'quiz' =====")
+          for row in meta[1:]:
+              camp = row[i_mcamp] if len(row) > i_mcamp else ""
+              if "quiz" in camp.lower():
+                  print(" ", row)
+          EOF
