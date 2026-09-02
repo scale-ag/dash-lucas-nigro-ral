@@ -1,0 +1,76 @@
+name: Debug Leads Total + Vendas (temporario)
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspecionar total de leads (04/08-02/09) e vendas
+        run: |
+          python3 - <<'EOF'
+          import urllib.request, urllib.parse, csv, io
+          from datetime import datetime, timezone, timedelta
+
+          BRT = timezone(timedelta(hours=-3))
+
+          def fetch(sid, sheet):
+              url = f"https://docs.google.com/spreadsheets/d/{sid}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote(sheet)}"
+              req = urllib.request.Request(url, headers={"User-Agent": "dash-debug-bot/1.0"})
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  raw = resp.read().decode("utf-8", errors="replace")
+              return list(csv.reader(io.StringIO(raw)))
+
+          def to_brt_date(v):
+              s2 = v.replace("Z", "+00:00")
+              dt = datetime.fromisoformat(s2)
+              if dt.tzinfo is None:
+                  dt = dt.replace(tzinfo=timezone.utc)
+              return dt.astimezone(BRT).strftime("%Y-%m-%d")
+
+          leads = fetch("1j3EQE4zbRlUVAKyDPTmlnTDP0Jlvw-enQyMPR2LXjfk", "Leads")
+          header = leads[0]
+          print("LEADS header:", header)
+          i_id = header.index("id")
+          i_created = header.index("criado_em")
+          i_name = header.index("nome")
+          i_phone = header.index("whatsapp")
+          i_camp = header.index("utm_campaign")
+          i_status = header.index("status") if "status" in header else None
+
+          print(f"\ntotal_rows (com header) = {len(leads)}")
+          nonempty = [r for r in leads[1:] if any((c or "").strip() for c in r)]
+          print(f"linhas nao vazias = {len(nonempty)}")
+
+          print("\n===== TODOS OS LEADS ordenados por criado_em (BRT) =====")
+          rows_sorted = sorted(nonempty, key=lambda r: r[i_created])
+          in_window = 0
+          for row in rows_sorted:
+              raw = row[i_created]
+              try:
+                  brt = to_brt_date(raw)
+              except Exception as e:
+                  brt = f"ERRO:{e}"
+              window = "2026-08-04" <= brt <= "2026-09-02" if not brt.startswith("ERRO") else False
+              if window:
+                  in_window += 1
+              testflag = "<test lead" in " ".join(str(c) for c in row).lower()
+              print(f"id={row[i_id][:8]} criado_em={raw!r:35} BRT={brt} nome={row[i_name]!r:25} phone={row[i_phone]!r:16} camp_valid={'RAL' in row[i_camp]}{'  <<TEST>>' if testflag else ''}")
+          print(f"\nTotal na janela 04/08-02/09 (BRT): {in_window}")
+
+          # duplicados por telefone
+          from collections import Counter
+          ph = Counter(row[i_phone] for row in nonempty if row[i_phone].strip())
+          dups = {p: n for p, n in ph.items() if n > 1}
+          print(f"\n===== Telefones com mais de 1 lead (duplicados) — {len(dups)} =====")
+          for p, n in sorted(dups.items(), key=lambda x: -x[1]):
+              print(f"  {p}: {n}x")
+
+          print("\n\n===== VENDAS: todas as linhas =====")
+          sales = fetch("1j3EQE4zbRlUVAKyDPTmlnTDP0Jlvw-enQyMPR2LXjfk", "Vendas")
+          sheader = sales[0]
+          print("VENDAS header:", sheader)
+          for row in sales[1:]:
+              if any((c or "").strip() for c in row):
+                  print(" ", row)
+          EOF
