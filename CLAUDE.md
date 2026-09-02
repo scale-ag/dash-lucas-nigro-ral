@@ -25,12 +25,17 @@
 - **`build/identidade-visual.css`:** cores default do template (cliente não pediu
   identidade visual própria).
 - **`build/GUIA-RELATORIOS.md`:** contexto do funil preenchido.
-- **Insights de Tráfego (opcional, não configurado ainda):** `build/relatorios.json`
-  e `build/relatorios_dados.json` começam vazios (`{}`). Para ativar: deixar a
-  Routine do Actions `briefing.yml` rodar (gera `relatorios_dados.json`) e criar
-  a **Routine do Claude** (`create_trigger` apontando para este repo) que lê os
-  números + os 2 guias e escreve `relatorios.json` na `main` (ver "Briefing
-  automático" abaixo).
+- **Insights de Tráfego:** análise por IA 1×/dia (23h59 BRT), **1 relatório por
+  dia** (não mais por período selecionado) em **6 seções de texto corrido**
+  (RESUMO DO PERÍODO · LEITURA DO FUNIL · CLASSIFICAÇÃO POR CAMPANHA/CONJUNTO ·
+  GARGALO DE DADO — opcional · AÇÕES RECOMENDADAS · PRÓXIMA DECISÃO). Funil:
+  Impressões → Cliques → Page View → Leads → MQLs → Agendamentos → Vendas, sem
+  etapa de comparecimento (agendamento via WhatsApp; responsabilidade do
+  tráfego termina no MQL). `build/relatorios.json` e `build/relatorios_dados.json`
+  começam vazios (`{}`) até a 1ª execução. Pipeline: a Routine do Actions
+  `briefing.yml` gera `relatorios_dados.json` (23h50 BRT) e a **Routine do
+  Claude** (`create_trigger`, 23h59 BRT) lê os números + os 2 guias e escreve
+  `relatorios.json` na `main` (ver "Briefing automático" abaixo).
 
 > **Fora do escopo deste projeto:** não há Cloudflare Worker nem chamada paga à
 > API da Anthropic no pipeline. A automação de Insights é feita por Routine
@@ -137,13 +142,13 @@ build/template.html       # esqueleto HTML. Placeholders __STYLES__, __APP_JS__,
 build/identidade-visual.css  # TODAS as cores (tema claro=padrão / escuro). Mexa AQUI p/ trocar só cor
 build/estilos.css         # layout/componentes (sidebar, topbar, period-picker, funil, tabelas, gráficos, aba Relatório)
 build/app.js              # lógica + renderização (KPIs, funil, tabelas, filtro cruzado, period-picker, heatmap, Relatório)
-build/relatorios.json     # Insights de Tráfego por período (aba Relatório) — VERSIONADO; lido no build, sem API. Vazio no template ({}).
-build/relatorios_dados.json      # números brutos por período (insumo p/ a Routine escrever relatorios.json) — não lido pelo site. Vazio no template ({}).
-build/relatorio_lib.py           # datas/agregação compartilhadas (gerar_relatorios.py + coletar_dados_relatorio.py)
+build/relatorios.json     # Insights de Tráfego do DIA (aba Relatório), 6 seções — VERSIONADO; lido no build, sem API. Vazio no template ({}).
+build/relatorios_dados.json      # números brutos do fechamento do dia (insumo p/ a Routine escrever relatorios.json) — não lido pelo site. Vazio no template ({}).
+build/relatorio_lib.py           # agregação (agg/derived/compare) compartilhada (gerar_relatorios.py + coletar_dados_relatorio.py)
 build/coletar_dados_relatorio.py # gera relatorios_dados.json (só números, sem texto) — roda no briefing.yml, 1x/dia
 build/gerar_relatorios.py        # gera relatorios.json determinístico (sem IA) — fallback MANUAL, não roda mais sozinho
-build/GUIA-RELATORIOS.md            # formato/estrutura dos Insights da aba Relatório (os 7 blocos) — preencher o contexto do funil
-build/GUIA-INTERPRETACAO-METRICAS.md # regras de diagnóstico por métrica (High Ticket) — leitura obrigatória p/ redigir
+build/GUIA-RELATORIOS.md            # formato/estrutura dos Insights (as 6 seções) — funil, fase de calibração, gargalo de dado
+build/GUIA-INTERPRETACAO-METRICAS.md # base de conhecimento por métrica (CTR/Connect Rate/ConvLP/CPL/TxMQL/CPMQL/Agendamento/CAC) — leitura obrigatória p/ redigir
 .github/workflows/deploy.yml    # roda build.py e publica no Pages (workflow_dispatch + schedule + push)
 .github/workflows/briefing.yml  # roda coletar_dados_relatorio.py e commita relatorios_dados.json na main (cron 1x/dia)
 dist/index.html           # saída gerada (gitignored; o Actions reconstrói)
@@ -167,16 +172,18 @@ e, abaixo, acrescenta 3 blocos novos + um painel de metas editável:
   Ranking pelo **resultado mais profundo disponível** (Venda→MQL), amostra relevante primeiro;
   sem amostra → badge **"Em observação"**. Limiares em `build.py`: `SAMPLE_MIN_SPEND`,
   `SAMPLE_MIN_MQLS`, `TOP_ADS_N`.
-- **Insights de Tráfego** — texto por período redigido pelo **Claude** (linguagem de
+- **Insights de Tráfego** — texto do **dia** redigido pelo **Claude** (linguagem de
   gestor de tráfego), lido de `build/relatorios.json` (sem API no build/navegador —
-  o site só exibe o texto já pronto). Formato em **4 quadrantes** por período. Cada
-  período compara com o período anterior **correto para aquela janela** (regra em
-  `relatorio_lib.previous_period`). Chaves de período fixas
-  (`hoje/ontem/3d/7d/14d/30d/mes/mespass/todo`), tags `Escalar/Otimizar/Cortar/Observar`.
-  Toda a aritmética é pré-calculada em `build/relatorios_dados.json` — a Routine só
-  interpreta, nunca recalcula. Regras completas em `build/GUIA-RELATORIOS.md` +
-  `build/GUIA-INTERPRETACAO-METRICAS.md`. `app.js` ainda reconhece o formato antigo
-  (`{"html": "…"}`) como fallback.
+  o site só exibe o texto já pronto). **1 análise por dia** (gerada no fechamento,
+  23h59 BRT), **não** por período selecionado — não reage ao seletor de período da
+  topbar. Formato em **6 seções de texto corrido** (sem tabelas): RESUMO DO PERÍODO ·
+  LEITURA DO FUNIL · CLASSIFICAÇÃO POR CAMPANHA/CONJUNTO · GARGALO DE DADO (só
+  aparece quando falta fonte conectada) · AÇÕES RECOMENDADAS · PRÓXIMA DECISÃO,
+  seguido de um rodapé fixo gerado pelo front-end (`app.js`), não pela IA. Toda a
+  aritmética é pré-calculada em `build/relatorios_dados.json` (números do dia,
+  janelas de 7/14/30d, acumulado p/ fase de calibração, quebra por
+  campanha/conjunto) — a Routine só interpreta, nunca recalcula. Regras completas
+  em `build/GUIA-RELATORIOS.md` + `build/GUIA-INTERPRETACAO-METRICAS.md`.
 
 ### Briefing automático do gestor (Routine do Claude, sem chamada à API Anthropic)
 `build/relatorios.json` pode ser escrito 1×/dia por uma **Routine do Claude**
@@ -195,10 +202,14 @@ como **fallback manual**. Limitação conhecida: usa os defaults de `build.py`
 (`META_CPMQL`/`META_CAC`/`VOLUME_MIN_AMOSTRAL`/`N_DIAS_CORTE`), não o que o gestor
 editou no painel (fica em `localStorage`).
 
-Funil completo: `Impressões → Cliques → Leads → MQLs → Agendamentos → Reuniões
-Realizadas → Vendas → Faturamento`. Enquanto só houver mídia paga × Leads, o funil
-vai até MQL; Agendamentos/Reuniões/Vendas/Fat aparecem "-" até chegar a lista do
-comercial.
+Funil completo: `Impressões → Cliques → Page View → Leads → MQLs → Agendamentos
+→ Vendas`. Sem etapa de comparecimento (agendamento via WhatsApp, fora da mídia
+paga) — a responsabilidade do tráfego termina no MQL. Impressões/Cliques/Page
+View/Leads/MQLs/Vendas/Faturamento já estão conectados e cruzados; só
+**Agendamentos** não tem fonte conectada ainda (precisa da lista/planilha do
+comercial) — Taxa de Agendamento, Custo por Agendamento e Taxa de Vendas (que usa
+Agendamentos como denominador) aparecem "-" até essa fonte ser conectada, mesmo
+com CAC e Faturamento já disponíveis via Vendas.
 
 ### Link do criativo (aba de mídia paga)
 `build.py` lê uma coluna opcional de permalink do criativo na aba de mídia →
@@ -247,9 +258,12 @@ filtro cruzado bidirecional; tabela diária com último dia no topo; heatmap de 
 fixa por métrica.
 
 ## Lacunas de dados (comuns até o cliente enviar mais fontes)
-- **Agendamentos / Reuniões Realizadas** → precisam da lista do comercial; aparecem "-".
-- **Page Views, CR, CPV, ConvLP** → precisam de uma fonte de page views.
-- Enquanto não vierem, essas métricas aparecem como "-".
+- **Agendamentos** → precisam da lista/planilha do comercial (agendamento via
+  WhatsApp); aparecem "-". Taxa de Agendamento, Custo por Agendamento e Taxa de
+  Vendas (denominador = Agendamentos) ficam "-" até essa fonte ser conectada —
+  ver GARGALO DE DADO nos Insights de Tráfego (`build/GUIA-RELATORIOS.md`).
+- Page Views (Connect Rate/ConvLP) e Vendas/Faturamento (CAC) **já estão
+  conectados** nesse cliente — não são lacuna.
 
 ## Publicação — problemas conhecidos
 1. **Push:** se a integração GitHub da sessão for somente‑leitura (403), o caminho

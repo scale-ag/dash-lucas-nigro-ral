@@ -746,89 +746,31 @@ function relRenderAdTable(id,list){
   });
 }
 
-function relBriefKey(){ if(STATE.selDays.size) return null; return STATE.preset||null; }
-
-/* Nota de saúde do funil: cor por faixa (mesmas faixas de build/relatorio_lib.py::_classificacao) */
-function healthClass(nota){
-  if(nota==null) return 'rh-none';
-  if(nota>=8) return 'rh-excelente';
-  if(nota>=6.5) return 'rh-saudavel';
-  if(nota>=5) return 'rh-atencao';
-  if(nota>=3) return 'rh-critico';
-  return 'rh-critico-grave';
-}
-
-function renderHealthBadge(ns){
-  if(!ns) return '';
-  const cls=healthClass(ns.nota);
-  const notaTxt = ns.nota==null ? '—/10' : nf1.format(ns.nota)+'/10';
-  const prov = ns.provisoria ? '<span class="rh-prov">Nota provisória</span>' : '';
-  const motivo = ns.motivo ? `<p class="rh-motivo">${ns.motivo}</p>` : '';
-  const subnotas = ns.subnotas ? Object.entries(ns.subnotas)
-    .map(([k,v])=>`<span class="rh-sub">${k.replace(/_/g,' ')}: ${v==null?'—':nf1.format(v)}</span>`).join('') : '';
-  return `<div class="rel-health ${cls}">
-    <div class="rh-top"><span class="rh-nota">${notaTxt}</span><span class="rh-classe">${ns.classificacao||''}</span>${prov}</div>
-    ${motivo}
-    <div class="rh-subs">${subnotas}</div>
-  </div>`;
-}
-
-function renderWhatsappBlock(texto){
-  if(!texto) return '';
-  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  return `<div class="rel-wa">
-    <div class="rel-wa-head"><b>Bloco para copiar (WhatsApp)</b>
-      <button type="button" class="rel-wa-copy" onclick="copyWhatsappBlock(this)">Copiar</button>
-    </div>
-    <pre class="rel-wa-box" id="relWaText">${esc(texto)}</pre>
-  </div>`;
-}
-
-function copyWhatsappBlock(btn){
-  const el=document.getElementById('relWaText'); if(!el) return;
-  const text=el.textContent;
-  const done=()=>{ const old=btn.textContent; btn.textContent='Copiado!'; setTimeout(()=>{btn.textContent=old;},1500); };
-  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text,done)); }
-  else fallbackCopy(text,done);
-}
-function fallbackCopy(text,done){
-  const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
-  document.body.appendChild(ta); ta.select();
-  try{ document.execCommand('copy'); done(); }catch(e){}
-  document.body.removeChild(ta);
-}
-
-const QUAD_TITLES={
-  quadro1_resumo:'1 · Resumo executivo e saúde do funil',
-  quadro2_diagnostico:'2 · Diagnóstico do funil',
-  quadro3_campeoes:'3 · Campanhas, estruturas e anúncios campeões',
-  quadro4_acoes:'4 · Ações priorizadas',
-};
+/* Insights de Tráfego: UMA análise por dia (gerada 23h59 BRT), não por
+   período selecionado — não reage ao seletor de período da topbar. 6 seções
+   fixas (ver build/GUIA-RELATORIOS.md); "gargalo_dado" só aparece quando
+   alguma fonte de dado (hoje: Agendamentos) está desconectada. */
+const REL_SECTIONS=[
+  ['resumo_periodo','Resumo do período'],
+  ['leitura_funil','Leitura do funil'],
+  ['classificacao_campanhas','Classificação por campanha/conjunto'],
+  ['gargalo_dado','Gargalo de dado — prioridade alta'],
+  ['acoes_recomendadas','Ações recomendadas'],
+  ['proxima_decisao','Próxima decisão'],
+];
 
 function renderRelBrief(){
   const wrap=document.getElementById('relBrief'), stampEl=document.getElementById('relBriefStamp');
-  const bf=DATA.briefings||{}, per=bf.periodos||{}, key=relBriefKey();
+  const bf=DATA.briefings||{};
+  const temConteudo=REL_SECTIONS.some(([k])=>bf[k]);
   stampEl.textContent = bf.generated_at ? `Insights gerados por IA · última atualização ${bf.generated_at} · atualiza 1×/dia (23h59 BRT)` : '';
-  if(!Object.keys(per).length){
-    wrap.innerHTML='<div class="rel-brief-empty">Os insights por IA ainda não foram gerados. São atualizados automaticamente 1×/dia.</div>'; return; }
-  if(!key || !per[key]){
-    wrap.innerHTML='<div class="rel-brief-empty">Insights disponíveis para os períodos predefinidos (Hoje, Ontem, 3, 7, 14, 30 dias, Este mês, Mês passado, Todo período). Selecione um desses no seletor de período.</div>'; return; }
-  const item=per[key];
-
-  // Schema novo (4 quadrantes + nota de saúde + bloco WhatsApp)
-  const temQuadrantes = item.quadro1_resumo || item.quadro2_diagnostico || item.quadro3_campeoes || item.quadro4_acoes;
-  if(temQuadrantes){
-    const quads = Object.keys(QUAD_TITLES).map(k=>
-      `<div class="rel-quad-card"><h4>${QUAD_TITLES[k]}</h4><div class="rel-quad-body rel-brief">${item[k]||'<p>—</p>'}</div></div>`
-    ).join('');
-    wrap.innerHTML = renderHealthBadge(item.nota_saude) + renderWhatsappBlock(item.whatsapp) +
-      `<div class="rel-quad-grid">${quads}</div>`;
+  if(!temConteudo){
+    wrap.innerHTML='<div class="rel-brief-empty">Os insights por IA ainda não foram gerados. São atualizados automaticamente 1×/dia, às 23h59 (horário de Brasília).</div>';
     return;
   }
-
-  // Fallback: schema antigo (bloco único de html/texto), enquanto a última
-  // geração real ainda não tiver rodado no novo formato.
-  wrap.innerHTML = item.html || item.texto || '<div class="rel-brief-empty">Sem conteúdo.</div>';
+  wrap.innerHTML = REL_SECTIONS.filter(([k])=>bf[k]).map(([k,title])=>
+    `<div class="rel-sec-card${k==='gargalo_dado'?' rel-sec-gargalo':''}"><h3>${title}</h3><div class="rel-sec-body">${bf[k]}</div></div>`
+  ).join('');
 }
 
 /* Top Anúncios (separado p/ recolorir sem re-renderizar os gráficos quando o
