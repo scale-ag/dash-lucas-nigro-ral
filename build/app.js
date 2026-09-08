@@ -596,7 +596,7 @@ function renderGeralCore(ids){
   hbar(ids.prof, Object.entries(byPr).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-mqls'), 10);
   // tabela diaria (todos os leads), ultimo dia no topo + heatmap
   const dl=daily(fL,fM,fS).slice().reverse();
-  renderTable({id:ids.daily, cols:DAILY_COLS, center:true, fit:true,
+  renderTable({id:ids.daily, cols:DAILY_COLS, center:true,
     rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:dailyCells(x,d)};}),
     total:(()=>{const d=derive(t);return dailyCells({...t,d:null},d,true);})(),
     selectable:true, selSet:STATE.selDays,
@@ -836,7 +836,7 @@ const DAILY_COLS=[
   {key:'ctr',label:'CTR',type:'pct'},{key:'cr',label:'CR',type:'pct'},{key:'convlp',label:'ConvLP',type:'pct'},
   {key:'leads',label:'Leads',type:'int',heat:'leads'},{key:'cpl',label:'CPL',type:'brl'},
   {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'mqls',label:'MQLs',type:'int',heat:'mqls'},{key:'cpmql',label:'CPMQL',type:'brl'},
-  {key:'chk',label:'Checkouts',type:'int'},{key:'vischk',label:'VisCHK',type:'pct'},
+  {key:'chk',label:'Checkouts',type:'int',w:104},{key:'vischk',label:'VisCHK',type:'pct'},
   {key:'convmql',label:'ConvMQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int',heat:'vendas'},{key:'cac',label:'CAC',type:'brl'},
   {key:'fat',label:'Fat.',type:'brl'},{key:'receita',label:'Receita',type:'brl'},{key:'roas',label:'ROAS',type:'num',heat:'roas'},
 ];
@@ -905,7 +905,7 @@ function renderMeta(){
     rows:topCacRows});
 
   const dl=daily(fL,fM,fS).slice().reverse();
-  renderTable({id:'tDaily', cols:DAILY_COLS, center:true, fit:true,
+  renderTable({id:'tDaily', cols:DAILY_COLS, center:true,
     rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:dailyCells(x,d)};}),
     total:(()=>{const d=derive(t);return dailyCells({...t,d:null},d,true);})(),
     selectable:true, selSet:STATE.selDays,
