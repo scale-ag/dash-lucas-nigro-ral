@@ -118,6 +118,24 @@ a{color:inherit}
 .list6{list-style:none;padding:0}
 .list6 li{display:grid;grid-template-columns:2.5rem minmax(0,1fr);gap:.75rem;padding:1.4rem 1.75rem 1.4rem 1.75rem;border-top:1px solid var(--ink);font-size:1.12rem;line-height:1.45;color:var(--ink)}
 .list6 li::before{content:attr(data-n);font:500 .9rem/1.8 var(--f-mono);color:var(--gray)}
+.cost{margin-top:4rem;background:var(--ink);color:#fff;border-radius:24px;padding:clamp(1.75rem,4vw,2.75rem);display:flex;flex-direction:column;gap:1.5rem}
+.cost h3{font-weight:900;font-size:clamp(1.5rem,2.6vw,2.2rem);letter-spacing:-.03em;line-height:1.1;text-wrap:balance}
+.cost ul{list-style:none;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:1px;background:var(--line-dark);border-radius:14px;overflow:hidden}
+@media (min-width:900px){.cost ul{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.cost li{background:#191a18;padding:1.25rem;font-size:1.05rem;line-height:1.5;color:rgba(255,255,255,.85)}
+.cost li b{display:block;color:var(--brand);font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.4rem}
+.compare{margin-top:4rem;font-weight:800;font-size:clamp(1.35rem,2.4vw,2.1rem);line-height:1.2;letter-spacing:-.025em;max-width:34ch;text-wrap:balance}
+.compare .hl{font-weight:900}
+.proof-one{margin-top:4rem;display:grid;grid-template-columns:minmax(0,1fr);gap:1.5rem;align-items:center;background:var(--paper);border-radius:24px;padding:clamp(1.5rem,4vw,2.5rem)}
+@media (min-width:900px){.proof-one{grid-template-columns:.8fr 1.2fr;gap:3rem}}
+.proof-one h3{font-weight:900;font-size:clamp(1.4rem,2.4vw,2rem);letter-spacing:-.03em;line-height:1.15;text-wrap:balance}
+.proof-one .chat{border:0}
+.stage{margin-top:3.5rem;font:700 .8rem/1.3 var(--f-sans);letter-spacing:.14em;text-transform:uppercase;color:var(--brand-dark)}
+.stage + .rows{margin-top:1rem}
+.after{margin-top:2rem;display:grid;grid-template-columns:minmax(0,1fr);gap:.5rem 2rem;padding:1.6rem;border:1px dashed var(--ink);border-radius:16px}
+@media (min-width:900px){.after{grid-template-columns:4.5rem minmax(0,1fr)}}
+.after .n{font:700 1rem/1.6 var(--f-sans);color:var(--brand-dark)}
+.after p{color:var(--ink-2);font-size:1.08rem}
 .bridge{margin-top:4.5rem;font-weight:800;font-size:clamp(1.6rem,3vw,2.9rem);line-height:1.1;letter-spacing:-.03em;max-width:24ch;text-wrap:balance}
 
 /* solução */
@@ -162,7 +180,7 @@ a{color:inherit}
 
 /* depoimentos */
 .chats{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;margin-top:3rem}
-@media (min-width:900px){.chats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:900px){.chats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .chat{background:#fff;border:1px solid var(--line);border-radius:22px;padding:1.5rem;display:flex;flex-direction:column;gap:1rem;min-width:0}
 .who{display:flex;align-items:center;gap:.8rem}
 .av{width:2.6rem;height:2.6rem;border-radius:50%;background:var(--ink);color:var(--brand);display:grid;place-items:center;font-weight:800;flex-shrink:0}
@@ -259,7 +277,7 @@ footer b{color:#fff}
         <h1>Sabe finanças? Aprenda a <span>vender consultoria</span> para empresas.</h1>
         <p class="sub"><strong>Formação para montar sua consultoria financeira empresarial:</strong> como encontrar empresas, conduzir o diagnóstico, apresentar a proposta e fechar o contrato.</p>
         <div class="cta">
-          <a class="btn" href="#lead-v2">Quero conversar sobre o Método RaL <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <a class="btn" href="#lead-v2">Quero conversar com a equipe pelo WhatsApp <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
         </div>
         <div class="note"><b class="t">Nota de copy · Hero</b>Regra dos 2 segundos: <b>o que é</b> (formação), <b>pra quem</b> (quem sabe finanças), <b>pra que</b> (vender consultoria para empresas). A headline ataca a trava real, que é vender. O texto do botão e a linha abaixo dele dizem exatamente o que acontece depois do clique.<br><br><b>Headlines alternativas para teste:</b> “Formação para montar sua consultoria financeira” · “Aprenda a vender consultoria financeira”.</div>
       </div>
@@ -288,18 +306,27 @@ footer b{color:#fff}
   <div class="wrap">
     <div class="two">
       <h2 class="h-lg"><span class="gray">Você sabe finanças.</span><br>O que trava é <span class="hl">conseguir mais clientes.</span></h2>
-      <p class="lead">Você domina DRE, fluxo de caixa e indicadores. Mas quando pensa em ter a própria consultoria, trava em pelo menos um destes pontos:</p>
+      <p class="lead">Você domina DRE, fluxo de caixa e indicadores. Mas na hora de transformar isso em cliente, alguma destas cenas acontece com você:</p>
     </div>
     <ul class="list6">
-      <li data-n="01">Não sabe onde encontrar empresas nem como abrir a conversa com o empresário</li>
-      <li data-n="02">Não se sente seguro para conduzir uma reunião de diagnóstico</li>
-      <li data-n="03">Não sabe montar uma proposta que justifique o valor do trabalho</li>
-      <li data-n="04">Não sabe quanto cobrar nem qual escopo oferecer</li>
-      <li data-n="05">Não sabe como organizar a entrega depois que o cliente fecha</li>
-      <li data-n="06">Continua atendendo sem processo, um cliente de cada vez</li>
+      <li data-n="01">O empresário pergunta “quanto custa?” e você trava no preço</li>
+      <li data-n="02">Você sabe exatamente onde a empresa perde dinheiro, mas não sabe como começar essa conversa</li>
+      <li data-n="03">Faz um diagnóstico excelente e ouve “vou pensar”</li>
+      <li data-n="04">Cobra por hora, ou um valor que você sabe que é baixo</li>
+      <li data-n="05">Seus clientes vêm só por indicação, quando vêm</li>
+      <li data-n="06">Você é o mais técnico da sala e fatura menos do que deveria</li>
     </ul>
+    <div class="cost">
+      <h3>Enquanto isso não muda, a conta não fecha.</h3>
+      <ul>
+        <li><b>Seu conhecimento</b>Vale muito para uma empresa, mas fica parado enquanto ninguém contrata.</li>
+        <li><b>O seu cliente</b>O empresário que precisava de você acaba contratando quem sabe vender.</li>
+        <li><b>O seu tempo</b>Cada mês que passa é mais um mês no mesmo lugar.</li>
+      </ul>
+    </div>
+    <p class="compare">Tem gente que sabe menos finanças que você e já vive de consultoria. <span class="hl">A diferença não é técnica. É saber vender.</span></p>
     <p class="bridge"><span class="gray">Isso não se resolve estudando mais finanças.</span> Se resolve com um método para vender e entregar consultoria.</p>
-    <div class="note"><b class="t">Nota de copy · Problema</b>O público já sente a dor, mas ainda não conhece a solução. Antes de apresentar o método, a página descreve a trava com as palavras de quem está travado. Os 6 pontos são os mesmos da LP original, reescritos em primeira pessoa do problema.</div>
+    <div class="note"><b class="t">Nota de copy · Problema</b>O público já sente a dor, mas ainda não conhece a solução. Antes de apresentar o método, a página descreve a trava com as palavras de quem está travado. Os 6 pontos viraram cenas que a pessoa reconhece, sem tom de acusação. Depois vêm o custo de ficar parado e a comparação com quem sabe menos e vende mais: é isso que dá urgência.</div>
   </div>
 </section>
 
@@ -337,26 +364,35 @@ footer b{color:#fff}
       </div>
     </div>
   </div>
+  <div class="wrap">
+    <div class="proof-one">
+      <h3>Na prática: uma aluna usou o diagnóstico do método numa reunião de prospecção e fechou o contrato.</h3>
+      <article class="chat">
+        <div class="who"><span class="av" aria-hidden="true">E</span><div><b>Eva</b><small>Me Finanças Empresariais</small></div></div>
+        <p class="bubble">Na quinta tive uma reunião de prospecção e, mesmo sem o sistema estar configurado, resolvi testar a parte do questionário e diagnóstico, resultado: cliente acabou de fechar o contrato<time>11:09</time></p>
+        <p class="cap">Testou o diagnóstico do Método RaL numa reunião de prospecção e fechou o contrato.</p>
+      </article>
+    </div>
+  </div>
 </section>
 
 <!-- O QUE VOCÊ VAI APRENDER -->
 <section class="sec bg-paper">
   <div class="wrap">
     <h2 class="h-xl">Do primeiro contato ao contrato fechado</h2>
-    <p class="lead" style="margin-top:1.2rem;max-width:44rem">A primeira etapa da formação é justamente a que mais trava: estruturar a oferta e vender. Depois vem a entrega.</p>
+    <p class="lead" style="margin-top:1.2rem;max-width:44rem">A formação começa pela parte que mais trava: estruturar a oferta e vender.</p>
+    <p class="stage">Etapa 1 · Estruture e venda</p>
     <ol class="rows">
       <li><span class="n">01</span><h3>Profissão e posicionamento</h3><p>Entenda o papel do consultor, defina o cliente ideal, construa sua oferta e estabeleça um escopo profissional.</p></li>
       <li><span class="n">02</span><h3>Prospecção e diagnóstico</h3><p>Aprenda a criar oportunidades, usar a Pesquisa EFA, qualificar empresas e conduzir reuniões comerciais.</p></li>
       <li><span class="n">03</span><h3>Proposta e fechamento</h3><p>Transforme o diagnóstico em apresentação, proposta, investimento, contrato e próximo passo.</p></li>
-      <li><span class="n">04</span><h3>Implantação e organização</h3><p>Estruture o onboarding, cadastre o cliente, organize dados, documentos, cronograma e responsabilidades.</p></li>
-      <li><span class="n">05</span><h3>Análise e planejamento</h3><p>Interprete resultado e caixa, acompanhe indicadores, revise margens, construa budget e objetivos financeiros.</p></li>
-      <li><span class="n">06</span><h3>Acompanhamento e crescimento</h3><p>Conduza reuniões mensais, apresente o Relatório Triforce, gerencie o relacionamento e organize a evolução da consultoria.</p></li>
     </ol>
+    <div class="after"><span class="n">+</span><p><b>E depois do contrato, você também aprende a entregar:</b> implantação, análise financeira, planejamento, budget e reuniões mensais com o Relatório Triforce.</p></div>
     <div class="inline-cta">
       <h3>Quer ver como isso se aplica ao seu momento?</h3>
-      <a class="btn" href="#lead-v2">Quero conversar sobre o Método RaL <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <a class="btn" href="#lead-v2">Quero conversar com a equipe pelo WhatsApp <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
     </div>
-    <div class="note"><b class="t">Nota de copy · Conteúdo</b>Mesmos 6 blocos da LP original. O título troca “O que você vai aprender” por uma promessa ligada à trava (vender). A linha de apoio lembra que a Etapa 1 da grade é “Estruture e venda”.</div>
+    <div class="note"><b class="t">Nota de copy · Conteúdo</b>A venda (Etapa 1) fica em destaque e a entrega vira um resumo. Assim a página não parece “mais um curso de finanças”, que é o que acabamos de dizer que não resolve.</div>
   </div>
 </section>
 
@@ -395,11 +431,6 @@ footer b{color:#fff}
     <h2 class="h-xl">Quem já está aplicando</h2>
     <p class="lead" style="margin-top:1.2rem;max-width:44rem">Consultores que fazem o Método RaL e já aplicam com os próprios clientes.</p>
     <div class="chats">
-      <article class="chat">
-        <div class="who"><span class="av" aria-hidden="true">E</span><div><b>Eva</b><small>Me Finanças Empresariais</small></div></div>
-        <p class="bubble">Na quinta tive uma reunião de prospecção e, mesmo sem o sistema estar configurado, resolvi testar a parte do questionário e diagnóstico, resultado: cliente acabou de fechar o contrato<time>11:09</time></p>
-        <p class="cap">Testou o diagnóstico do Método RaL numa reunião de prospecção e fechou o contrato.</p>
-      </article>
       <article class="chat">
         <div class="who"><span class="av" aria-hidden="true">A</span><div><b>Antonio Marcos</b><small>Especialista em Finanças</small></div></div>
         <p class="bubble">Acompanhei, como ouvinte, uma reunião real de fechamento conduzida pelo Lucas Nigro. Essa experiência me trouxe insights valiosos sobre como me posicionar e conversar com meus futuros clientes.<time>16:06</time></p>
@@ -442,7 +473,7 @@ footer b{color:#fff}
           <li>Modelos comerciais, operacionais e financeiros</li>
           <li>FinHub incluído para os 3 primeiros clientes, durante 12 meses</li>
         </ul>
-        <a class="btn" href="#lead-v2">Quero conversar sobre o Método RaL <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <a class="btn" href="#lead-v2">Quero conversar com a equipe pelo WhatsApp <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
         <p class="alt" style="font-size:.8rem">Condição válida para as inscrições da primeira turma.</p>
       </div>
       <div class="bonus">
@@ -477,6 +508,7 @@ footer b{color:#fff}
   <div class="wrap">
     <h2 class="h-xl">Perguntas frequentes</h2>
     <div class="faq">
+      <details open><summary>Não sou bom de vendas. Serve para mim?</summary><p>Serve. A primeira etapa inteira da formação é sobre estruturar a oferta e vender. Você recebe roteiros de reunião, a Pesquisa EFA para conduzir o diagnóstico e modelos de proposta e contrato. Um dos alunos, o Antonio, acompanhou como ouvinte uma reunião real de fechamento conduzida pelo Lucas.</p></details>
       <details open><summary>Preciso já atuar como consultor?</summary><p>Não. A formação atende tanto quem está iniciando quanto quem já possui clientes e precisa organizar melhor sua operação.</p></details>
       <details open><summary>Preciso ter conhecimento financeiro?</summary><p>É necessário ter uma base financeira ou disposição real para estudar. O método organiza a aplicação prática, mas não substitui conhecimento técnico, responsabilidade e julgamento profissional.</p></details>
       <details><summary>Qual é o investimento?</summary><p>O investimento da primeira turma é de 12x de R$ 206,54 (ou R$ 1.997 à vista). As formas de pagamento são apresentadas no bate-papo.</p></details>
@@ -494,7 +526,7 @@ footer b{color:#fff}
     <div class="copy">
       <span class="badge">Condição válida para as inscrições da primeira turma</span>
       <h2 class="h-xl">Sabe finanças? Aprenda a vender consultoria.</h2>
-      <p>Preencha seus dados e nossa equipe te chama no WhatsApp para marcar uma conversa online sobre o Método RaL.</p>
+      <p><b>Daqui a 6 meses você pode estar no mesmo lugar, ou com a sua consultoria rodando.</b> O primeiro passo é uma conversa: preencha seus dados e nossa equipe te chama no WhatsApp.</p>
       <p><b>Não é checkout. É uma conversa, sem compromisso.</b></p>
       <div class="note"><b class="t">Nota de copy · Formulário</b>Mesmas perguntas e opções do formulário original, para o lead cair na mesma planilha e a classificação de MQL continuar igual. O botão diz o que acontece depois do envio.</div>
     </div>
