@@ -132,6 +132,16 @@ a{color:inherit}
 .proof-one .chat{border:0}
 .stage{margin-top:3.5rem;font:700 .8rem/1.3 var(--f-sans);letter-spacing:.14em;text-transform:uppercase;color:var(--brand-dark)}
 .stage + .rows{margin-top:1rem}
+.deliver-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:3rem;align-items:start}
+@media (min-width:1024px){.deliver-grid{grid-template-columns:.8fr 1.2fr;gap:4rem}}
+.deliver-grid .rows{margin-top:0}
+.deliver-grid .rows li{grid-template-columns:minmax(0,1fr);gap:.4rem}
+@media (min-width:900px){.deliver-grid .rows li{grid-template-columns:3.5rem minmax(0,1fr)}.deliver-grid .rows li p{grid-column:2}}
+.support{margin-top:2.5rem;display:grid;grid-template-columns:minmax(0,1fr);gap:1rem}
+@media (min-width:768px){.support{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.support div{background:var(--paper);border-radius:18px;padding:1.4rem;display:flex;flex-direction:column;gap:.4rem;min-width:0}
+.support b{font-weight:800;font-size:1.08rem;letter-spacing:-.02em}
+.support p{color:var(--muted);font-size:.97rem}
 .after{margin-top:2rem;display:grid;grid-template-columns:minmax(0,1fr);gap:.5rem 2rem;padding:1.6rem;border:1px dashed var(--ink);border-radius:16px}
 @media (min-width:900px){.after{grid-template-columns:4.5rem minmax(0,1fr)}}
 .after .n{font:700 1rem/1.6 var(--f-sans);color:var(--brand-dark)}
@@ -387,12 +397,36 @@ footer b{color:#fff}
       <li><span class="n">02</span><h3>Prospecção e diagnóstico</h3><p>Aprenda a criar oportunidades, usar a Pesquisa EFA, qualificar empresas e conduzir reuniões comerciais.</p></li>
       <li><span class="n">03</span><h3>Proposta e fechamento</h3><p>Transforme o diagnóstico em apresentação, proposta, investimento, contrato e próximo passo.</p></li>
     </ol>
-    <div class="after"><span class="n">+</span><p><b>E depois do contrato, você também aprende a entregar:</b> implantação, análise financeira, planejamento, budget e reuniões mensais com o Relatório Triforce.</p></div>
     <div class="inline-cta">
       <h3>Quer ver como isso se aplica ao seu momento?</h3>
       <a class="btn" href="#lead-v2">Quero conversar com a equipe pelo WhatsApp <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
     </div>
     <div class="note"><b class="t">Nota de copy · Conteúdo</b>A venda (Etapa 1) fica em destaque e a entrega vira um resumo. Assim a página não parece “mais um curso de finanças”, que é o que acabamos de dizer que não resolve.</div>
+  </div>
+</section>
+
+<!-- ENTREGA -->
+<section class="sec bg-white">
+  <div class="wrap">
+    <div class="deliver-grid">
+      <div class="sol-copy">
+        <p class="stage" style="margin-top:0">Etapa 2 · Implemente e entregue</p>
+        <h2 class="h-xl">Fechou o cliente. E agora?</h2>
+        <p class="lead">Vender é só o começo. O cliente que fica é o que enxerga resultado todo mês. Por isso a formação também ensina a organizar e entregar a consultoria, do primeiro dia ao acompanhamento mensal.</p>
+        <p class="strong">Você não improvisa a entrega. Segue um processo que já foi usado em mais de 100 empresas.</p>
+      </div>
+      <ol class="rows">
+        <li><span class="n">04</span><h3>Implantação e organização</h3><p>Estruture o onboarding, cadastre o cliente, organize dados, documentos, cronograma e responsabilidades.</p></li>
+        <li><span class="n">05</span><h3>Análise e planejamento</h3><p>Interprete resultado e caixa, acompanhe indicadores, revise margens, construa budget e objetivos financeiros.</p></li>
+        <li><span class="n">06</span><h3>Acompanhamento e crescimento</h3><p>Conduza reuniões mensais, apresente o Relatório Triforce, gerencie o relacionamento e organize a evolução da consultoria.</p></li>
+      </ol>
+    </div>
+    <div class="support">
+      <div><b>FinHub para organizar</b><p>Clientes, cronogramas de 12 meses, reuniões, documentos, DRE, DFC e indicadores em um só lugar. Menos improviso e menos planilha isolada.</p></div>
+      <div><b>Modelos prontos</b><p>Roteiros de reunião, checklists de implantação e templates de relatórios para usar com os seus clientes.</p></div>
+      <div><b>Atualização constante</b><p>Encontros online a cada 15 dias, especialistas convidados e novos conteúdos durante os 12 meses.</p></div>
+    </div>
+    <div class="note"><b class="t">Nota de copy · Entrega</b>Pedido do Lucas: mostrar a entrega e a organização. Vem depois da venda e abre com a dúvida que aparece logo após o primeiro “sim” (“e agora?”), para não tirar o foco da trava principal. O card “Atualização constante” responde à reciclagem com os encontros, especialistas e conteúdos novos que já estão na oferta.</div>
   </div>
 </section>
 
