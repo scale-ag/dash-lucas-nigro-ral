@@ -28,6 +28,7 @@ const STATE = {
   page:'geral', from:(()=>{const [y,m]=TODAY.split('-'); return `${y}-${m}-01`;})(), to:TODAY, preset:'mes', tax:true,
   selDays:new Set(),
   mSelC:new Set(), mSelA:new Set(), mSelAd:new Set(),
+  gSelC:new Set(), gSelA:new Set(), gSelAd:new Set(),
   sort:{}, colw: JSON.parse(localStorage.getItem('dm_colw')||'{}'),
 };
 const taxf = ()=> STATE.tax ? TAX : 1;
@@ -450,7 +451,7 @@ function lineChart(id, d){
 }
 
 /* Donut de taxa de qualificação (Mar02): verde = MQL · vermelho = desqualificado */
-function donutQlf(id, mqls, leads){
+function donutQlf(id, mqls, leads, pctId){
   destroy(id); const el=document.getElementById(id); if(!el) return;
   const dsq=Math.max(0,leads-mqls);
   charts[id]=new Chart(el,{type:'doughnut',
@@ -458,7 +459,7 @@ function donutQlf(id, mqls, leads){
       backgroundColor:[cvar('--good'),cvar('--bad')],borderColor:cvar('--surface'),borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'68%',
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.label+': '+intf(c.raw)+(leads?' ('+pct(c.raw/leads)+')':'')}}}}});
-  const el2=document.getElementById('mQlfPct'); if(el2) el2.textContent=pct(leads?mqls/leads:null);
+  const el2=document.getElementById(pctId||'mQlfPct'); if(el2) el2.textContent=pct(leads?mqls/leads:null);
 }
 /* Mar03/Mar10: MQLs por dimensão (campanha/conjunto/anúncio) por dia — 1 linha por membro.
    Legenda é um painel HTML próprio (fora do canvas) — a legenda NATIVA do Chart.js
@@ -537,7 +538,7 @@ function renderGeral(){ renderGeralCore(GERAL_IDS); }
 function renderGeralCore(ids){
   const fL=leadsActive(), fM=metaActive(), fS=salesActive();
   const t=totals(fL,fM,fS), dv=derive(t), g=dv.gasto;
-  const leadsAds=fL.filter(l=>l.src==='meta'||l.src==='google');
+  const leadsAds=fL.filter(l=>l.src==='meta'||l.src==='google'||l.src==='chatgpt');
   const nAds=leadsAds.length, mqlsAds=leadsAds.reduce((s,r)=>s+r.q,0);
   const nOrg=fL.filter(l=>l.src==='org').length;
   const semUtm=fL.filter(l=>!l.utm).length, comUtm=t.leads-semUtm;
@@ -580,7 +581,7 @@ function renderGeralCore(ids){
   document.getElementById(ids.kpis2).innerHTML=k2.map(kpiCard).join('');
   comboChart(ids.combo, daily(fL,fM,fS));
   // por origem
-  const srcName={meta:'Meta Ads',google:'Google Ads',org:'Orgânico',outros:'Outros'};
+  const srcName={meta:'Meta Ads',google:'Google Ads',chatgpt:'ChatGPT Ads',org:'Orgânico',outros:'Outros'};
   const bySrc={}; fL.forEach(l=>{const k=srcName[l.src]||l.src; bySrc[k]=(bySrc[k]||0)+1;});
   hbar(ids.source, Object.entries(bySrc).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-leads'));
   // por perfil profissional (verde = qualificado, cinza = não qualificado; "Sem resposta" sempre por último)
@@ -588,7 +589,7 @@ function renderGeralCore(ids){
   const bArr=Object.values(byB).sort((a,b)=>(a.label==='Sem resposta')-(b.label==='Sem resposta')||b.leads-a.leads);
   hbar(ids.bucket, bArr, x=>x.leads, x=>x.q?cvar('--bar-q'):cvar('--bar-noq'));
   // por plataforma
-  const platName={ig:'Instagram',fb:'Facebook','—':'Orgânico/—'};
+  const platName={ig:'Instagram',fb:'Facebook',gpt:'ChatGPT','—':'Orgânico/—'};
   const byP={}; fL.forEach(l=>{const k=platName[l.plat]||l.plat; byP[k]=(byP[k]||0)+1;});
   hbar(ids.plat, Object.entries(byP).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-leads'));
   // por profissao (top 10)
@@ -782,7 +783,7 @@ function renderRelBrief(){
    "Em observação" — o pill do título mostra quantos são campeões DE quantos
    anúncios no total, pra não sugerir que 10 linhas = 10 vencedores. */
 function renderRelAds(){
-  const fL=leadsActive(), fM=metaActive(), fS=salesActive();
+  const fL=leadsActive().filter(notGpt), fM=metaActive(), fS=salesActive().filter(notGpt);
   const struct=adStructMap(fM,fL);
   const agg=buildAgg(fL,fM,fS,'ad');
   const pool=Object.entries(agg).filter(([ad,a])=>a.sp>0).map(([ad,a])=>({ad, a, struct:struct[ad]||{camp:'—',adset:'—'}}));
@@ -849,10 +850,11 @@ function dailyCells(x,d,isTotal){
 }
 
 /* ---------------- PAGE 2: Captura Meta Ads ---------------- */
-/* Mar04: considera TODOS os leads e TODO o gasto de todas as fontes de tráfego
-   (sem filtrar por atribuição). Hoje só há Meta; quando vier google/tiktok/orgânico
-   etc., já entram automaticamente. */
-function metaScope(ex){ let fL=leadsActive(), fM=metaActive(), fS=salesActive();
+/* Mar04: considera os leads e o gasto de todas as fontes, EXCETO ChatGPT Ads
+   (utm_source chatgpt*), que tem página própria (renderGpt) — senão os leads do
+   ChatGPT inflariam os Leads/MQLs da Meta e derrubariam o CPL/CPMQL dela. */
+const notGpt = r=>r.src!=='chatgpt';
+function metaScope(ex){ let fL=leadsActive().filter(notGpt), fM=metaActive(), fS=salesActive().filter(notGpt);
   if(ex!=='C'&&STATE.mSelC.size){ fL=fL.filter(r=>STATE.mSelC.has(r.camp)); fM=fM.filter(r=>STATE.mSelC.has(r.camp)); fS=fS.filter(r=>STATE.mSelC.has(r.camp)); }
   if(ex!=='A'&&STATE.mSelA.size){ fL=fL.filter(r=>STATE.mSelA.has(r.adset)); fM=fM.filter(r=>STATE.mSelA.has(r.adset)); fS=fS.filter(r=>STATE.mSelA.has(r.adset)); }
   if(ex!=='D'&&STATE.mSelAd.size){ fL=fL.filter(r=>STATE.mSelAd.has(r.ad)); fM=fM.filter(r=>STATE.mSelAd.has(r.ad)); fS=fS.filter(r=>STATE.mSelAd.has(r.ad)); }
@@ -960,6 +962,98 @@ function renderMeta(){
     rows:q.map((l,i)=>({k:'q'+i, cells:{d:l.d,nm:l.nm,prof:l.prof,bucket:l.bucket,camp:l.camp,em:l.em,ph:l.ph}}))});
 }
 
+/* ---------------- PAGE: Captura ChatGPT Ads ----------------
+   Só leads com utm_source "chatgpt*" (src==='chatgpt' em build.py). Não há
+   planilha de gasto do ChatGPT Ads: tudo aqui é volume (Leads → MQLs → Vendas),
+   sem CPL/CPMQL/CAC. */
+const isGpt = r=>r.src==='chatgpt';
+function gptScope(ex){ let fL=leadsActive().filter(isGpt), fS=salesActive().filter(isGpt);
+  const f=(set,dim)=>{ fL=fL.filter(r=>set.has(r[dim])); fS=fS.filter(r=>set.has(r[dim])); };
+  if(ex!=='C'&&STATE.gSelC.size) f(STATE.gSelC,'camp');
+  if(ex!=='A'&&STATE.gSelA.size) f(STATE.gSelA,'adset');
+  if(ex!=='D'&&STATE.gSelAd.size) f(STATE.gSelAd,'ad');
+  return {fL,fS}; }
+function selGpt(dim,key,ctrl){
+  const sets={C:STATE.gSelC,A:STATE.gSelA,D:STATE.gSelAd}, s=sets[dim];
+  if(ctrl){ s.has(key)?s.delete(key):s.add(key); }
+  else { const sole=s.has(key)&&s.size===1&&!Object.entries(sets).some(([k2,x])=>k2!==dim&&x.size);
+    Object.values(sets).forEach(x=>x.clear()); if(!sole) s.add(key); }
+  renderGpt();
+}
+function leadsBarChart(id, d){
+  destroy(id); const el=document.getElementById(id); if(!el) return;
+  const mut=cmuted();
+  charts[id]=new Chart(el,{type:'bar',
+    data:{labels:d.map(x=>x.d.slice(5)), datasets:[
+      {label:'Leads',data:d.map(x=>x.leads),backgroundColor:cvar('--chart-leads'),borderRadius:3},
+      {label:'MQLs',data:d.map(x=>x.mqls),backgroundColor:cvar('--chart-mqls'),borderRadius:3},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:cink(),boxWidth:10,usePointStyle:true,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+intf(c.raw)}}},
+      scales:{x:{ticks:{color:mut,font:{size:10}},grid:{display:false}},
+        y:{beginAtZero:true,ticks:{color:mut,precision:0,font:{size:10}},grid:{color:cgrid()}}}}});
+}
+function renderGpt(){
+  const F=gptScope(null), fL=F.fL, fS=F.fS;
+  const t=totals(fL,[],fS), s=salesOf(t);
+  const allLeads=leadsActive().length;
+  const tx=t.leads?t.mqls/t.leads:null;
+  const NA='<span class="na-tag">sem dado</span>';
+  const steps=[
+    ['Leads ChatGPT Ads', intf(t.leads), [['% do total',pct(allLeads?t.leads/allLeads:null)],['CPL',NA]]],
+    ['MQLs (Qualificados)', intf(t.mqls), [['Tx‑MQL',pct(tx)],['CPMQL',NA]], false, 'hl-mql'],
+    ['Vendas', s.vendas!=null?intf(s.vendas):'0', [['ConvMQL',s.convmql!=null?pct(s.convmql):'-'],['CAC',NA]]],
+    ['Faturamento', s.fat!=null?brl(s.fat):brl(0), [['Ticket',s.tm!=null?brl(s.tm):'-']], false, 'hl-fat'],
+  ];
+  document.getElementById('gptFunnel').innerHTML=funnelHTML(steps);
+
+  const dd=daily(fL,[],fS);
+  leadsBarChart('gptCombo', dd);
+  const gcols=[
+    {key:'date',label:'Data',type:'date'},{key:'wd',label:'Dia',type:'dim',w:70},
+    {key:'leads',label:'Leads',type:'int',heat:'leads'},{key:'mqls',label:'MQLs',type:'int',heat:'mqls'},
+    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int',heat:'vendas'},
+    {key:'convmql',label:'ConvMQL',type:'pct'},{key:'fat',label:'Fat.',type:'brl'},
+  ];
+  const dayCells=(x,isTotal)=>{const ss=salesOf(x); return {date:isTotal?null:x.d, wd:isTotal?'':weekday(x.d),
+    leads:x.leads, mqls:x.mqls, tx:x.leads?x.mqls/x.leads:null, vendas:ss.vendas, convmql:ss.convmql, fat:ss.fat};};
+  renderTable({id:'gptDaily', cols:gcols, center:true,
+    rows:dd.slice().reverse().map(x=>({k:x.d, cells:dayCells(x)})),
+    total:dayCells({...t,d:null},true),
+    selectable:true, selSet:STATE.selDays,
+    onSelect:(k,e)=>{ toggleSet(STATE.selDays,k,e&&(e.ctrlKey||e.metaKey)); syncDateInputs(); renderAll(); },
+  });
+
+  const byAd={}; fL.forEach(l=>{ const a=byAd[l.ad]||(byAd[l.ad]={label:l.ad,leads:0,mqls:0}); a.leads++; a.mqls+=l.q; });
+  hbar('gptLeadsAd', Object.values(byAd), x=>x.leads, ()=>cvar('--chart-leads'), 10);
+  hbar('gptMqlAd', Object.values(byAd), x=>x.mqls, ()=>cvar('--chart-mqls'), 10, 'MQLs');
+  donutQlf('gptQlfDonut', t.mqls, t.leads, 'gptQlfPct');
+
+  const hcols=[
+    {key:'dim',label:'',type:'dim',big:true},{key:'leads',label:'Leads',type:'int'},{key:'mqls',label:'MQLs',type:'int'},
+    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int'},{key:'convmql',label:'ConvMQL',type:'pct'},
+    {key:'fat',label:'Fat.',type:'brl'},
+  ];
+  const cellsOf=(k,a)=>{const ss=salesOf(a); return {dim:k,leads:a.leads,mqls:a.mqls,tx:a.leads?a.mqls/a.leads:null,
+    vendas:ss.vendas,convmql:ss.convmql,fat:ss.fat};};
+  [['C','camp','gptCamp','Campanha',STATE.gSelC],['A','adset','gptAdset','Conjunto',STATE.gSelA],['D','ad','gptAd','Anúncio',STATE.gSelAd]]
+    .forEach(([dc,dim,id,label,set])=>{
+      const S=gptScope(dc), agg=buildAgg(S.fL,[],S.fS,dim);
+      renderTable({id, cols:hcols.map((c,i)=>i===0?{...c,label}:c),
+        rows:Object.entries(agg).map(([k,a])=>({k, cells:cellsOf(k,a)})),
+        total:cellsOf(null,totals(S.fL,[],S.fS)),
+        selectable:true, selSet:set, onSelect:(k,e)=>selGpt(dc,k,e&&(e.ctrlKey||e.metaKey))});
+    });
+
+  const q=fL.filter(l=>l.q).sort((a,b)=>(a.d<b.d?1:-1));
+  document.getElementById('gptQCount').textContent=q.length+' leads';
+  renderTable({id:'gptQual',
+    cols:[{key:'d',label:'Data',type:'date'},{key:'nm',label:'Nome',type:'dim'},{key:'prof',label:'Perfil',type:'dim'},
+      {key:'camp',label:'Campanha',type:'dim',big:true},{key:'ad',label:'Anúncio',type:'dim'},{key:'ph',label:'Telefone',type:'dim',w:110}],
+    rows:q.map((l,i)=>({k:'gq'+i, cells:{d:l.d,nm:l.nm,prof:l.prof,camp:l.camp,ad:l.ad,ph:l.ph}}))});
+}
+
 /* ---------------- date presets ---------------- */
 const PRESETS=[
   ['hoje','Hoje',()=>[TODAY,TODAY]],
@@ -1049,17 +1143,19 @@ function ppApply(){
 }
 
 /* ---------------- navigation & boot ---------------- */
+const PAGE_TITLES={geral:'Visão Geral de Leads', meta:'Captura Meta Ads', gpt:'Captura ChatGPT Ads', rel:'Relatório'};
 function setPage(p){ STATE.page=p;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.page===p));
   document.getElementById('page-geral').classList.toggle('active',p==='geral');
   document.getElementById('page-meta').classList.toggle('active',p==='meta');
+  document.getElementById('page-gpt').classList.toggle('active',p==='gpt');
   document.getElementById('page-rel').classList.toggle('active',p==='rel');
-  document.getElementById('ptitle').textContent = p==='meta'?'Captura Meta Ads':(p==='rel'?'Relatório':'Visão Geral de Leads');
+  document.getElementById('ptitle').textContent = PAGE_TITLES[p];
   document.getElementById('navToggle').checked=false;
-  history.replaceState(null,'', p==='meta'?'#meta':(p==='rel'?'#rel':'#geral'));
+  history.replaceState(null,'', '#'+p);
   renderAll();
 }
-function renderAll(){ if(STATE.page==='meta') renderMeta(); else if(STATE.page==='rel') renderRelatorio(); else renderGeral(); }
+function renderAll(){ if(STATE.page==='meta') renderMeta(); else if(STATE.page==='gpt') renderGpt(); else if(STATE.page==='rel') renderRelatorio(); else renderGeral(); }
 
 function applyTheme(){ const t=localStorage.getItem('dm_theme'); if(t==='light') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme','dark'); }
 applyTheme();
@@ -1074,7 +1170,7 @@ document.getElementById('ppCancel').addEventListener('click',ppClose);
 document.getElementById('periodPop').addEventListener('click',e=>e.stopPropagation());
 document.addEventListener('click',()=>{ if(ppIsOpen()) ppClose(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&ppIsOpen()) ppClose(); });
-document.getElementById('clearBtn').addEventListener('click',()=>{ STATE.mSelC.clear();STATE.mSelA.clear();STATE.mSelAd.clear();STATE.selDays.clear(); applyPreset('mes'); });
+document.getElementById('clearBtn').addEventListener('click',()=>{ STATE.mSelC.clear();STATE.mSelA.clear();STATE.mSelAd.clear();STATE.gSelC.clear();STATE.gSelA.clear();STATE.gSelAd.clear();STATE.selDays.clear(); applyPreset('mes'); });
 document.getElementById('refreshBtn').addEventListener('click',function(){ this.classList.add('loading'); location.href=location.pathname+'?t='+Date.now()+location.hash; });
 
 /* painel de Metas & parâmetros — edita ao vivo, salva em localStorage e recolore
@@ -1101,7 +1197,7 @@ document.getElementById('buildFoot').textContent='build __BUILD_ID__';
 document.getElementById('buildFoot2').textContent='· build __BUILD_ID__';
 
 syncDateInputs();
-setPage(location.hash==='#meta'?'meta':(location.hash==='#rel'?'rel':'geral'));
+setPage(PAGE_TITLES[location.hash.slice(1)]?location.hash.slice(1):'geral');
 
 /* auto-refresh com cache-bust ~30 min */
 setTimeout(()=>{ location.href=location.pathname+'?t='+Date.now()+location.hash; }, 30*60*1000);

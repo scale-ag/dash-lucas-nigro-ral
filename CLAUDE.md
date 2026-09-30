@@ -90,6 +90,16 @@ Cada linha da aba **Leads** já vem com a atribuição de campanha pronta:
 `Ad Name` (valores idênticos aos do Meta Ads, linha a linha) — `build.py` só
 copia esses valores, sem precisar de nenhuma aba intermediária tipo "Conversas".
 
+### ChatGPT Ads (utm_source)
+Lead com `utm_source` começando por `chatgpt` (`chatgpt-ads`, `chatgpt`) vira
+`src="chatgpt"` / `plat="gpt"` em `build.py` (vendas herdam o `src` do lead).
+Tem página própria **Captura ChatGPT Ads** (`renderGpt()` em `app.js`, hash
+`#gpt`) com Leads → MQLs → Vendas/Faturamento, tabela diária, hierarquia
+Campanha/Conjunto/Anúncio e leads qualificados. **Sem gasto**: não há planilha
+de mídia do ChatGPT Ads, então CPL/CPMQL/CAC aparecem "sem dado". Esses leads
+ficam **fora** da página Meta Ads e do Top/Piores Anúncios (`notGpt`), mas
+entram na Visão Geral (todos os leads).
+
 ### Vendas & Faturamento (cruzamento com Vendas)
 `build.py` → `build_purchases()` lê a aba **Vendas**, filtra só compras
 confirmadas (`pago == "sim"`) e devolve uma lista **não agregada**, uma entrada
@@ -236,7 +246,8 @@ python build/build.py --leads-file leads.csv --meta-file meta.csv --out dist/ind
 
 ## Especificação funcional (resumo)
 
-Três **páginas separadas** (sidebar):
+Quatro **páginas separadas** (sidebar) — a 4ª, **Captura ChatGPT Ads**, fica
+entre Meta Ads e Relatório (ver "ChatGPT Ads (utm_source)" acima):
 1. **Visão Geral de Leads** — funil vertical (Gasto → Impressões → Cliques → Leads →
    MQLs → Vendas/Faturamento) + KPIs secundários; gráfico combinado diário +
    tabela diária com heatmap (todos os leads); barras por origem/faixa/plataforma/profissão.

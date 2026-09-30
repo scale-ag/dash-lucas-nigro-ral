@@ -348,8 +348,9 @@ def process(leads_rows, meta_rows, sales_rows):
         lheader,
         {"id": ["id"], "created": ["criado_em"], "phone": ["whatsapp"], "name": ["nome"],
          "qualif": ["classificacao"], "campaign": ["utm_campaign"], "adset": ["utm_medium"],
-         "ad": ["utm_content"], "bucket": ["atende_empresas"]},
-        {"id": 0, "created": 1, "phone": 3, "name": 2, "qualif": 14, "campaign": 7, "adset": 6, "ad": 8, "bucket": 10},
+         "ad": ["utm_content"], "bucket": ["atende_empresas"], "source": ["utm_source"]},
+        {"id": 0, "created": 1, "phone": 3, "name": 2, "qualif": 14, "campaign": 7, "adset": 6, "ad": 8,
+         "bucket": 10, "source": 5},
     )
 
     leads = []
@@ -368,7 +369,12 @@ def process(leads_rows, meta_rows, sales_rows):
             continue
         campaign_raw = cell(row, lidx["campaign"])
         campaign_valid = valid_utm(campaign_raw)
-        src = "meta" if campaign_valid else "org"
+        # utm_source "chatgpt-ads"/"chatgpt" = ChatGPT Ads: página própria na
+        # dash, sem gasto (não há planilha de mídia do ChatGPT) e fora da de Meta.
+        if norm(cell(row, lidx["source"])).startswith("chatgpt"):
+            src = "chatgpt"
+        else:
+            src = "meta" if campaign_valid else "org"
         camp = campaign_raw if campaign_valid else "(sem campanha)"
         adset = cell(row, lidx["adset"]) if campaign_valid else "(sem conjunto)"
         ad = cell(row, lidx["ad"]) if campaign_valid else "(sem anúncio)"
@@ -384,7 +390,7 @@ def process(leads_rows, meta_rows, sales_rows):
         leads.append({
             "d": lead_date,
             "src": src,
-            "plat": "ig" if src == "meta" else "—",
+            "plat": {"meta": "ig", "chatgpt": "gpt"}.get(src, "—"),
             "camp": camp,
             "adset": adset,
             "ad": ad,
