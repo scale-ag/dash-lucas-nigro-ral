@@ -783,7 +783,7 @@ function renderRelBrief(){
    "Em observação" — o pill do título mostra quantos são campeões DE quantos
    anúncios no total, pra não sugerir que 10 linhas = 10 vencedores. */
 function renderRelAds(){
-  const fL=leadsActive().filter(notGpt), fM=metaActive(), fS=salesActive().filter(notGpt);
+  const fL=leadsActive().filter(isMeta), fM=metaActive(), fS=salesActive().filter(isMeta);
   const struct=adStructMap(fM,fL);
   const agg=buildAgg(fL,fM,fS,'ad');
   const pool=Object.entries(agg).filter(([ad,a])=>a.sp>0).map(([ad,a])=>({ad, a, struct:struct[ad]||{camp:'—',adset:'—'}}));
@@ -850,11 +850,11 @@ function dailyCells(x,d,isTotal){
 }
 
 /* ---------------- PAGE 2: Captura Meta Ads ---------------- */
-/* Mar04: considera os leads e o gasto de todas as fontes, EXCETO ChatGPT Ads
-   (utm_source chatgpt*), que tem página própria (renderGpt) — senão os leads do
-   ChatGPT inflariam os Leads/MQLs da Meta e derrubariam o CPL/CPMQL dela. */
-const notGpt = r=>r.src!=='chatgpt';
-function metaScope(ex){ let fL=leadsActive().filter(notGpt), fM=metaActive(), fS=salesActive().filter(notGpt);
+/* Só leads/vendas atribuídos à Meta (src==='meta'). Leads sem custo — ChatGPT Ads
+   (página própria) e orgânicos "(sem campanha)" — ficam de fora, senão entram no
+   denominador sem gasto e derrubam o CPL/CPMQL do funil abaixo do das campanhas. */
+const isMeta = r=>r.src==='meta';
+function metaScope(ex){ let fL=leadsActive().filter(isMeta), fM=metaActive(), fS=salesActive().filter(isMeta);
   if(ex!=='C'&&STATE.mSelC.size){ fL=fL.filter(r=>STATE.mSelC.has(r.camp)); fM=fM.filter(r=>STATE.mSelC.has(r.camp)); fS=fS.filter(r=>STATE.mSelC.has(r.camp)); }
   if(ex!=='A'&&STATE.mSelA.size){ fL=fL.filter(r=>STATE.mSelA.has(r.adset)); fM=fM.filter(r=>STATE.mSelA.has(r.adset)); fS=fS.filter(r=>STATE.mSelA.has(r.adset)); }
   if(ex!=='D'&&STATE.mSelAd.size){ fL=fL.filter(r=>STATE.mSelAd.has(r.ad)); fM=fM.filter(r=>STATE.mSelAd.has(r.ad)); fS=fS.filter(r=>STATE.mSelAd.has(r.ad)); }

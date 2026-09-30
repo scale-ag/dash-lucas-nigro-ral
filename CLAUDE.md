@@ -97,8 +97,10 @@ Tem página própria **Captura ChatGPT Ads** (`renderGpt()` em `app.js`, hash
 `#gpt`) com Leads → MQLs → Vendas/Faturamento, tabela diária, hierarquia
 Campanha/Conjunto/Anúncio e leads qualificados. **Sem gasto**: não há planilha
 de mídia do ChatGPT Ads, então CPL/CPMQL/CAC aparecem "sem dado". Esses leads
-ficam **fora** da página Meta Ads e do Top/Piores Anúncios (`notGpt`), mas
-entram na Visão Geral (todos os leads).
+ficam **fora** da página Meta Ads e do Top/Piores Anúncios, mas entram na
+Visão Geral (todos os leads). A página Meta Ads (`metaScope`) e o Top/Piores
+(`renderRelAds`) usam **só `src==="meta"`** (`isMeta`) — orgânicos "(sem
+campanha)" também ficam fora, p/ o CPL/CPMQL do funil bater com o das campanhas.
 
 ### Vendas & Faturamento (cruzamento com Vendas)
 `build.py` → `build_purchases()` lê a aba **Vendas**, filtra só compras
