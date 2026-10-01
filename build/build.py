@@ -371,10 +371,17 @@ def process(leads_rows, meta_rows, sales_rows):
         campaign_valid = valid_utm(campaign_raw)
         # utm_source "chatgpt-ads"/"chatgpt" = ChatGPT Ads: página própria na
         # dash, sem gasto (não há planilha de mídia do ChatGPT) e fora da de Meta.
-        if norm(cell(row, lidx["source"])).startswith("chatgpt"):
+        # Meta só com utm_source da Meta (ou vazio); outra origem com campanha
+        # preenchida (ex.: lead de teste "adryan gpt") vira "outros".
+        source = norm(cell(row, lidx["source"]))
+        if source.startswith("chatgpt"):
             src = "chatgpt"
+        elif not campaign_valid:
+            src = "org"
+        elif not source or source.startswith(("meta", "facebook", "fb", "instagram", "ig")):
+            src = "meta"
         else:
-            src = "meta" if campaign_valid else "org"
+            src = "outros"
         camp = campaign_raw if campaign_valid else "(sem campanha)"
         adset = cell(row, lidx["adset"]) if campaign_valid else "(sem conjunto)"
         ad = cell(row, lidx["ad"]) if campaign_valid else "(sem anúncio)"

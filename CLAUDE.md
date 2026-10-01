@@ -101,6 +101,9 @@ ficam **fora** da página Meta Ads e do Top/Piores Anúncios, mas entram na
 Visão Geral (todos os leads). A página Meta Ads (`metaScope`) e o Top/Piores
 (`renderRelAds`) usam **só `src==="meta"`** (`isMeta`) — orgânicos "(sem
 campanha)" também ficam fora, p/ o CPL/CPMQL do funil bater com o das campanhas.
+Lead só vira `meta` se tiver campanha **e** `utm_source` da Meta (`meta-ads`,
+`facebook`, `ig`… ou vazio); campanha preenchida com outra origem (ex.: lead de
+teste `utm_source="adryan gpt"`, campanha `testetres`) vira `src="outros"`.
 
 ### Vendas & Faturamento (cruzamento com Vendas)
 `build.py` → `build_purchases()` lê a aba **Vendas**, filtra só compras
