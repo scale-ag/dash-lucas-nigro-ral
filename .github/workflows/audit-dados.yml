@@ -1,0 +1,163 @@
+name: Auditoria de dados (temporario)
+on:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Auditar Leads x Meta Ads x Vendas (somente leitura, sem PII)
+        run: |
+          python3 - <<'PY'
+          import sys, re
+          from collections import Counter, defaultdict
+          sys.path.insert(0, "build")
+          import build as bp
+
+          def sq(s): return re.sub(r"\s+", " ", (s or "").strip()).lower()
+          def sid(x): return (x or "")[:8]
+
+          L = bp.fetch_csv(bp.sheet_url(bp.SPREADSHEET_ID_FUNIL, bp.SHEET_LEADS))
+          V = bp.fetch_csv(bp.sheet_url(bp.SPREADSHEET_ID_FUNIL, bp.SHEET_VENDAS))
+          M = bp.fetch_csv(bp.sheet_url(bp.SPREADSHEET_ID_META, bp.SHEET_META))
+
+          print("################ CABECALHOS ################")
+          print("LEADS :", L[0]); print("VENDAS:", V[0]); print("META  :", M[0])
+
+          # ---------------- META ----------------
+          mh = M[0]; mi = {h: i for i, h in enumerate(mh)}
+          def mc(r, k): return bp.cell(r, mi.get(k))
+          mrows = [r for r in M[1:] if any((c or "").strip() for c in r)]
+          print("\n################ META ADS ################")
+          print("linhas:", len(mrows))
+          days = [bp.parse_date(mc(r, "Day")) for r in mrows]
+          bad_days = [mc(r, "Day") for r, d in zip(mrows, days) if not d]
+          print("datas:", min(d for d in days if d), "->", max(d for d in days if d), "| Day nao parseado:", bad_days[:10])
+          key = Counter((mc(r,"Day"), mc(r,"Campaign Name"), mc(r,"Ad Set Name"), mc(r,"Ad Name")) for r in mrows)
+          dups = {k: n for k, n in key.items() if n > 1}
+          print("linhas DUPLICADAS (mesmo dia+campanha+conjunto+anuncio):", len(dups))
+          for k, n in list(dups.items())[:20]: print("   ", n, "x", k)
+          mcamps, madsets, mads = set(), set(), set()
+          mtrip = set(); mday_camp = defaultdict(float)
+          ad_parents = defaultdict(set); adset_parents = defaultdict(set)
+          spend_c = defaultdict(float); spend_a = defaultdict(float); spend_ad = defaultdict(float)
+          tot = Counter()
+          for r, d in zip(mrows, days):
+              c, a, ad = mc(r,"Campaign Name"), mc(r,"Ad Set Name"), mc(r,"Ad Name")
+              sp = bp.to_float(mc(r,"Amount Spent"))
+              mcamps.add(c); madsets.add(a); mads.add(ad); mtrip.add((c,a,ad))
+              ad_parents[ad].add((c,a)); adset_parents[a].add(c)
+              spend_c[c]+=sp; spend_a[(c,a)]+=sp; spend_ad[(c,a,ad)]+=sp; mday_camp[(d,c)]+=sp
+              tot["gasto"]+=sp; tot["impr"]+=bp.to_float(mc(r,"Impressions")); tot["cliques"]+=bp.to_float(mc(r,"Link Clicks")); tot["pv"]+=bp.to_float(mc(r,"Landing Page Views"))
+          print("totais:", {k: round(v,2) for k,v in tot.items()})
+          print("campanhas:", len(mcamps), "| conjuntos:", len(madsets), "| anuncios:", len(mads))
+          for c in sorted(mcamps): print(f"   R$ {spend_c[c]:9.2f}  {c!r}")
+          print("anuncio com MESMO NOME em mais de 1 conjunto/campanha (a dash soma pelo nome):")
+          for ad, ps in ad_parents.items():
+              if len(ps) > 1: print("   ", repr(ad), "->", sorted(ps))
+          print("conjunto com MESMO NOME em mais de 1 campanha:")
+          for a, ps in adset_parents.items():
+              if len(ps) > 1: print("   ", repr(a), "->", sorted(ps))
+
+          # ---------------- LEADS ----------------
+          lh = L[0]; li = {h: i for i, h in enumerate(lh)}
+          def lc(r, k): return bp.cell(r, li.get(k))
+          lrows = [r for r in L[1:] if any((c or "").strip() for c in r)]
+          print("\n################ LEADS ################")
+          print("linhas:", len(lrows))
+          tests = [r for r in lrows if bp.is_test_lead(" ".join(r))]
+          print("linhas de teste ('<test lead'):", len(tests))
+          lrows = [r for r in lrows if not bp.is_test_lead(" ".join(r))]
+          ld = [bp.parse_date_brt(lc(r,"criado_em")) for r in lrows]
+          print("criado_em nao parseado:", [lc(r,"criado_em") for r,d in zip(lrows,ld) if not d][:10])
+          print("datas:", min(d for d in ld if d), "->", max(d for d in ld if d))
+          ids = Counter(lc(r,"id") for r in lrows)
+          print("ids vazios:", ids.get("",0), "| ids duplicados:", {sid(k):n for k,n in ids.items() if k and n>1})
+          ph = Counter(bp.canon_phone(lc(r,"whatsapp")) for r in lrows)
+          print("telefones repetidos (mesma pessoa em >1 linha):", sum(1 for k,n in ph.items() if k and n>1), "telefones /", sum(n for k,n in ph.items() if k and n>1), "linhas | sem telefone:", ph.get("",0))
+          print("classificacao:", Counter(lc(r,"classificacao") for r in lrows))
+          print("utm_source:", Counter(lc(r,"utm_source") for r in lrows))
+          def src_of(r):
+              if bp.norm(lc(r,"utm_source")).startswith("chatgpt"): return "chatgpt"
+              return "meta" if bp.valid_utm(lc(r,"utm_campaign")) else "org"
+          srcs = [src_of(r) for r in lrows]
+          print("classificacao na dash (src):", Counter(srcs))
+          print("\n-- leads SEM campanha valida (viram 'org'/sem campanha) --")
+          for r, s, d in zip(lrows, srcs, ld):
+              if s == "org":
+                  print(f"   {d} id={sid(lc(r,'id'))} src={lc(r,'utm_source')!r} camp={lc(r,'utm_campaign')!r} med={lc(r,'utm_medium')!r} cont={lc(r,'utm_content')!r} term={lc(r,'utm_term')!r} cls={lc(r,'classificacao')}")
+          print("\n-- leads com utm_source != meta-ads mas classificados como META (campanha preenchida) --")
+          for r, s, d in zip(lrows, srcs, ld):
+              if s == "meta" and bp.norm(lc(r,"utm_source")) not in ("meta-ads",):
+                  print(f"   {d} id={sid(lc(r,'id'))} src={lc(r,'utm_source')!r} camp={lc(r,'utm_campaign')!r}")
+
+          print("\n################ CRUZAMENTO UTM (leads META x planilha Meta) ################")
+          nc = {sq(x): x for x in mcamps}; na = {sq(x): x for x in madsets}; nd = {sq(x): x for x in mads}
+          probs = Counter(); detail = defaultdict(Counter)
+          for r, s, d in zip(lrows, srcs, ld):
+              if s != "meta": continue
+              c, a, ad = lc(r,"utm_campaign"), lc(r,"utm_medium"), lc(r,"utm_content")
+              for lab, v, exact, normd in (("campanha", c, mcamps, nc), ("conjunto", a, madsets, na), ("anuncio", ad, mads, nd)):
+                  if v in exact: continue
+                  kind = "so difere espaco/maiuscula" if sq(v) in normd else "NAO EXISTE no Meta"
+                  probs[(lab, kind)] += 1; detail[(lab, kind)][v] += 1
+              if (c,a,ad) not in mtrip and c in mcamps and a in madsets and ad in mads:
+                  probs[("combinacao camp+conj+anuncio", "nao existe junta no Meta")] += 1
+                  detail[("combinacao camp+conj+anuncio", "nao existe junta no Meta")][f"{c} / {a} / {ad}"] += 1
+              if d and mday_camp.get((d, c), 0) == 0 and c in mcamps:
+                  probs[("lead em dia SEM gasto da campanha", "info")] += 1
+                  detail[("lead em dia SEM gasto da campanha", "info")][f"{d} {c}"] += 1
+          meta_leads = sum(1 for s in srcs if s == "meta")
+          print("leads META:", meta_leads, "| problemas:", dict(probs) or "nenhum")
+          for k, cnt in detail.items():
+              print("  ", k)
+              for v, n in cnt.most_common(30): print(f"      {n:3d}x {v!r}")
+              for v, n in cnt.most_common(30):
+                  if k[1] == "so difere espaco/maiuscula":
+                      print("         no Meta esta:", repr({"campanha":nc,"conjunto":na,"anuncio":nd}[k[0]][sq(v)]))
+
+          print("\n-- gasto SEM nenhum lead META (campanha/conjunto/anuncio) --")
+          lc_set = Counter(); la_set = Counter(); lad_set = Counter()
+          for r, s in zip(lrows, srcs):
+              if s == "meta":
+                  lc_set[lc(r,"utm_campaign")]+=1; la_set[(lc(r,"utm_campaign"),lc(r,"utm_medium"))]+=1; lad_set[(lc(r,"utm_campaign"),lc(r,"utm_medium"),lc(r,"utm_content"))]+=1
+          for (c,a,ad), sp in sorted(spend_ad.items(), key=lambda x:-x[1]):
+              if sp > 0 and lad_set[(c,a,ad)] == 0: print(f"   R$ {sp:8.2f}  {c} / {a} / {ad}")
+          print("\n-- leads META por campanha x gasto --")
+          for c in sorted(set(mcamps) | set(lc_set)):
+              print(f"   leads={lc_set[c]:4d}  gasto=R$ {spend_c.get(c,0):9.2f}  {c!r}")
+
+          # ---------------- VENDAS ----------------
+          vh = V[0]; vi = {h: i for i, h in enumerate(vh)}
+          def vc(r, k): return bp.cell(r, vi.get(k))
+          vrows = [r for r in V[1:] if any((c or "").strip() for c in r)]
+          print("\n################ VENDAS ################")
+          print("linhas:", len(vrows), "| pago:", Counter(vc(r,"pago") for r in vrows), "| status:", Counter(vc(r,"status") for r in vrows))
+          print("produto:", Counter(vc(r,"produto") for r in vrows), "| casado_por:", Counter(vc(r,"casado_por") for r in vrows))
+          byid = {lc(r,"id"): (r, s) for r, s in zip(lrows, srcs)}
+          byph = {}
+          for r, s, d in sorted(zip(lrows, srcs, ld), key=lambda x: x[2] or ""):
+              p = bp.canon_phone(lc(r,"whatsapp"))
+              if p and p not in byph: byph[p] = (r, s)
+          for r in vrows:
+              pago = bp.is_yes(vc(r,"pago"))
+              lid = vc(r,"lead_id"); hit = byid.get(lid) if lid else None; how = "lead_id" if hit else ""
+              if lid and not hit: how = "lead_id NAO ACHADO"
+              if not hit:
+                  h2 = byph.get(bp.canon_phone(vc(r,"whatsapp")))
+                  if h2: hit, how = h2, how + "+telefone"
+              lr, ls = hit if hit else (None, None)
+              camp_lead = lc(lr,"utm_campaign") if lr is not None else "-"
+              print(f"   {bp.parse_date_brt(vc(r,'pago_em'))} pago={vc(r,'pago')!r} R$ {bp.to_float(vc(r,'valor')):.2f} lead_id={sid(lid) or '-'} cruzou={how or 'NAO (fora da dash)'} src_lead={ls} "
+                    f"| venda.utm_source={vc(r,'utm_source')!r} venda.utm_campaign={vc(r,'utm_campaign')!r} | lead.utm_campaign={camp_lead!r}{'' if pago else '  (ignorada: nao paga)'}")
+
+          print("\n################ CONFERE COM O QUE A DASH MOSTRA ################")
+          data = bp.process(L, M, V)
+          print("dash leads:", len(data["leads"]), Counter(l["src"] for l in data["leads"]),
+                "| MQLs:", sum(l["q"] for l in data["leads"]), "| vendas:", len(data["sales"]),
+                "| gasto bruto:", round(sum(m["sp"] for m in data["meta"]),2), "| linhas meta:", len(data["meta"]))
+          PY
