@@ -75,6 +75,19 @@ jobs:
               elif tab == "Investimento":
                   print("  plataforma:", Counter(c(r, "plataforma") for r in B), "| total:", round(sum(bp.to_float(c(r, "investimento")) for r in B), 2))
                   ds = sorted(d for d in (bp.parse_date(c(r, "data")) for r in B) if d); print("  datas:", ds[:1], "->", ds[-1:])
+          h, B, c = load("Manychat")
+          print(f"\n######## Manychat: {len(B)} linhas\nheader: {h}")
+          for k in ["canal", "fluxo", "utm_source", "utm_campaign", "origem_tipo"]:
+              print(f"  {k}: {Counter(c(r, k) for r in B).most_common(15)}")
+          mph = {bp.canon_phone(c(r, "whatsapp")) for r in B} - {""}
+          print("  com whatsapp:", len(mph), "| bate com Leads:", len(mph & lead_ph))
+          ds = sorted(d for d in (bp.parse_date_brt(c(r, "criado_em")) for r in B) if d); print("  datas:", ds[:1], "->", ds[-1:])
+          h, B, c = load("Qualificação")
+          print(f"\n######## Qualificação: {len(B)} linhas\nheader: {h}")
+          qph = {bp.canon_phone(c(r, "whatsapp")) for r in B} - {""}
+          print("  classificacao:", Counter(c(r, "classificacao") for r in B), "| telefones que NÃO estão na Leads:", len(qph - lead_ph), "| Leads fora da Qualificação:", len(lead_ph - qph))
+          lq = {bp.canon_phone(lc(r, "whatsapp")): lc(r, "classificacao") for r in L}
+          print("  classificação diferente entre Leads e Qualificação:", sum(1 for r in B if bp.canon_phone(c(r, "whatsapp")) in lq and lq[bp.canon_phone(c(r, "whatsapp"))] != c(r, "classificacao")))
           h, B, c = load("Dashboard Comercial")
           print("\n######## Dashboard Comercial")
           for r in B: print("  ", [x for x in r if x.strip()])
