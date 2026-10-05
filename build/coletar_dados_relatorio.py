@@ -40,6 +40,9 @@ def totais_dict(a: dict) -> dict:
         "cpm": _r(a["cpm"]), "ctr": _r(a["ctr"], 4), "connect_rate": _r(a["connect_rate"], 4),
         "convlp": _r(a["convlp"], 4), "cpl": _r(a["cpl"]), "txmql": _r(a["txmql"], 4),
         "cpmql": _r(a["cpmql"]), "cac": _r(a["cac"]),
+        "agendamentos": a.get("agendamentos", 0), "propostas": a.get("propostas", 0),
+        "txag": _r(a.get("txag"), 4), "cpag": _r(a.get("cpag")), "cpproposta": _r(a.get("cpproposta")),
+        "txvendas": _r(a.get("txvendas"), 4),
     }
 
 
@@ -90,8 +93,11 @@ def main():
     leads_rows = bp.load_rows(bp.sheet_url(bp.SPREADSHEET_ID_FUNIL, bp.SHEET_LEADS), args.leads_file)
     sales_rows = bp.load_rows(bp.sheet_url(bp.SPREADSHEET_ID_FUNIL, bp.SHEET_VENDAS), args.sales_file)
     meta_rows = bp.load_rows(bp.sheet_url(bp.SPREADSHEET_ID_META, bp.SHEET_META), args.meta_file)
-    data = bp.process(leads_rows, meta_rows, sales_rows)
-    leads, meta, sales = data["leads"], data["meta"], data["sales"]
+    com_leads_rows = bp.load_rows(bp.sheet_url(bp.SPREADSHEET_ID_FUNIL, bp.SHEET_COM_LEADS), None)
+    com_etapas_rows = bp.load_rows(bp.sheet_url(bp.SPREADSHEET_ID_FUNIL, bp.SHEET_COM_ETAPAS), None)
+    data = bp.process(leads_rows, meta_rows, sales_rows, com_leads_rows, com_etapas_rows)
+    # agendamentos/propostas (com[]) entram no mesmo fluxo das vendas: agg() soma ag/pr/vendas por campo
+    leads, meta, sales = data["leads"], data["meta"], data["sales"] + data["com"]
 
     now_brt = datetime.now(BRT)
     today = now_brt.date()
@@ -125,11 +131,10 @@ def main():
             "n_dias_corte": bp.N_DIAS_CORTE,
         },
         # Funil: Impressões -> Cliques -> Page View -> Leads -> MQLs -> Agendamentos -> Vendas.
-        # Agendamentos ainda não tem fonte conectada (nem aba, nem coluna) — só Vendas/Faturamento
-        # já cruzam com Leads (build.py::build_purchases + process). Ver GUIA-RELATORIOS.md.
+        # Agendamentos/propostas vêm do CRM comercial (abas Comercial_Leads/Comercial_Etapas).
         "fontes_conectadas": {
             "impressoes_cliques": True, "page_view": True, "leads": True, "mqls": True,
-            "agendamentos": False, "vendas": True, "faturamento": True,
+            "agendamentos": True, "propostas": True, "vendas": True, "faturamento": True,
         },
         "hoje": totais_dict(hoje),
         "janelas": {

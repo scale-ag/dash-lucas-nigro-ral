@@ -88,19 +88,21 @@ Impressões → Cliques → Page View → Leads → MQLs → Agendamentos → Ve
   `utm_campaign`/`utm_medium`/`utm_content`.
 - **MQL** = coluna `classificacao` (aba Leads) == `"QUALIFICADO"` — já
   automatizado no sistema, não precisa ser explicado nem recalculado.
-- **Agendamento** acontece via **WhatsApp**, fora da mídia paga — **sem
-  fonte de dado conectada** ao dashboard ainda. **Não existe etapa de
+- **Agendamento** acontece via **WhatsApp**, fora da mídia paga — vem do
+  **CRM comercial** (abas `Comercial_Leads`/`Comercial_Etapas`, funil
+  `metodo_ral`, etapa "Reunião agendada"; "Proposta enviada" também é
+  lida). **Não existe etapa de
   comparecimento** nesse funil (o agendamento é direto por WhatsApp) — a
   **responsabilidade do tráfego termina no MQL**.
 - **Venda** é registrada na aba **Vendas**, cruzada de volta ao anúncio de
   origem por `lead_id` (fallback por telefone) — **já conectada**.
 
 > **Estado atual dos dados:** Impressões → Cliques → Page View → Leads →
-> MQLs → Vendas estão todos conectados e cruzados. **Só Agendamentos não
-> tem fonte conectada** — por isso Taxa de Agendamento e Custo por
-> Agendamento aparecem "-", e Taxa de Vendas (que usa Agendamentos como
-> denominador) também aparece "-" mesmo com o número absoluto de Vendas e o
-> CAC disponíveis. Ver "Gargalo de dado" abaixo.
+> MQLs → Agendamentos → Propostas → Vendas estão todos conectados e
+> cruzados (`fontes_conectadas` tudo `true`). Agendamentos/propostas só
+> contam leads do CRM que casam com um lead da aba Leads (por
+> `marketing_lead_id` ou telefone), na data em que entraram na etapa — o
+> volume ainda é pequeno, então trate as taxas como sinal, não conclusão.
 
 ## Fórmulas fundamentais
 
@@ -108,10 +110,11 @@ Impressões → Cliques → Page View → Leads → MQLs → Agendamentos → Ve
   **ConvLP** = Leads ÷ Page Views
 - **CPL** = Investimento ÷ Leads · **TxMQL** = MQLs ÷ Leads · **CPMQL** =
   Investimento ÷ MQLs
-- **Taxa de Agendamento** = Agendamentos ÷ MQLs (hoje "-", sem fonte) ·
-  **Custo por Agendamento** = Investimento ÷ Agendamentos (hoje "-")
-- **Taxa de Vendas** = Vendas ÷ Agendamentos (hoje "-", denominador sem
-  fonte) · **CAC** = Investimento ÷ Vendas (calculável — Vendas conectada)
+- **Taxa de Agendamento** = Agendamentos ÷ MQLs (`txag`) · **Custo por
+  Agendamento** = Investimento ÷ Agendamentos (`cpag`) · **Custo por
+  Proposta** = Investimento ÷ Propostas (`cpproposta`)
+- **Taxa de Vendas** = Vendas ÷ Agendamentos (`txvendas`) · **CAC** =
+  Investimento ÷ Vendas
 
 Regra de ouro: **acumulativas somam** (impressões, cliques, page views,
 leads, MQLs, gasto, vendas); **derivadas recalculam dos totais** (nunca some
@@ -187,8 +190,7 @@ dividido por período) tem os seguintes campos, cada um uma string HTML
   volume mínimo quando já fora da calibração mas ainda com amostra curta).
 - Cite Connect Rate e ConvLP do dia (dados conectados via Page Views do
   Meta Ads) — não são "-", são parte normal da leitura.
-- Onde Agendamentos/Taxa de Vendas aparecerem "-" na leitura, não invente
-  número — remeta à seção GARGALO DE DADO.
+- Onde alguma métrica vier `null` no JSON, não invente número.
 
 ### 3. CLASSIFICAÇÃO POR CAMPANHA/CONJUNTO (`classificacao_campanhas`)
 
@@ -207,13 +209,9 @@ escreva `null` nem string vazia) — o front-end só mostra a seção quando a
 chave existe.
 
 Quando presente, explique:
-- Qual dado está faltando (hoje: Agendamentos — `fontes_conectadas.agendamentos
-  == false`).
-- O impacto nas métricas dependentes: Taxa de Agendamento, Custo por
-  Agendamento e Taxa de Vendas ficam "-" (CAC e Faturamento **não** são
-  afetados — Vendas já está conectada).
-- Qual é a ação de maior impacto pra resolver isso (conectar a lista/planilha
-  do comercial com os agendamentos feitos via WhatsApp ao dashboard).
+- Qual dado está faltando (a chave de `fontes_conectadas` que está `false`).
+- O impacto nas métricas que dependem dele (ficam "-").
+- Qual é a ação de maior impacto pra resolver isso.
 
 ### 5. AÇÕES RECOMENDADAS (`acoes_recomendadas`)
 

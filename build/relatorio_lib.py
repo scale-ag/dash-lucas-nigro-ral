@@ -10,8 +10,8 @@ brutos de `build.py` (`leads[]`/`meta[]`/`sales[]`).
 Funil deste cliente: Impressões → Cliques → Page View → Leads → MQLs →
 Agendamentos → Vendas. Não há etapa de comparecimento (o agendamento acontece
 via WhatsApp, fora da mídia paga) — a responsabilidade do tráfego termina no
-MQL. Agendamentos não têm fonte de dado conectada ainda (ver
-`build/GUIA-RELATORIOS.md` → "Gargalo de dado").
+MQL. Agendamentos/propostas vêm do CRM comercial (`com[]` de build.py,
+passado junto com `sales`).
 """
 from __future__ import annotations
 
@@ -74,11 +74,12 @@ def agg(meta: list[dict], leads: list[dict], sales: list[dict], start: date, end
     pv = sum(r.get("pv", 0) for r in m)
     n_leads = len(l)
     n_mqls = sum(r["q"] for r in l)
-    n_vendas = sum(r.get("vendas", 1) for r in s)
+    n_vendas = sum(r.get("vendas", 0) for r in s)
     faturamento = sum(r.get("fat", 0) for r in s)
     return {
         "spend": spend, "impr": impr, "clicks": clicks, "pv": pv,
         "leads": n_leads, "mqls": n_mqls, "vendas": n_vendas, "faturamento": faturamento,
+        "agendamentos": sum(r.get("ag", 0) for r in s), "propostas": sum(r.get("pr", 0) for r in s),
     }
 
 
@@ -95,11 +96,15 @@ def derived(a: dict) -> dict:
         "txmql": (mqls / leads) if leads else None,
         "cpmql": (spend / mqls) if mqls else None,
         "cac": (spend / vendas) if vendas else None,
+        "txag": (a.get("agendamentos", 0) / mqls) if mqls and a.get("agendamentos") else None,
+        "cpag": (spend / a["agendamentos"]) if a.get("agendamentos") else None,
+        "cpproposta": (spend / a["propostas"]) if a.get("propostas") else None,
+        "txvendas": (vendas / a["agendamentos"]) if a.get("agendamentos") else None,
         **a,
     }
 
 
-RATE_METRICS = {"ctr", "connect_rate", "convlp", "txmql"}
+RATE_METRICS = {"ctr", "connect_rate", "convlp", "txmql", "txag"}
 MATERIAL_PCT = 0.10     # variação relativa mínima p/ considerar mudança relevante
 MATERIAL_PP = 0.03      # variação em pontos percentuais mínima p/ métricas de taxa
 
@@ -108,8 +113,9 @@ def compare(cur: dict, prev: dict | None) -> dict:
     """Compara duas agregações `derived()` métrica a métrica. Só marca
     `material=True` quando a variação passa os limiares mínimos — evita
     listar oscilações irrelevantes como se fossem alerta."""
-    metrics = ["spend", "impr", "clicks", "pv", "leads", "mqls", "vendas", "faturamento",
-               "cpm", "ctr", "connect_rate", "convlp", "cpl", "txmql", "cpmql", "cac"]
+    metrics = ["spend", "impr", "clicks", "pv", "leads", "mqls", "agendamentos", "propostas", "vendas",
+               "faturamento", "cpm", "ctr", "connect_rate", "convlp", "cpl", "txmql", "cpmql", "txag",
+               "cpag", "cpproposta", "cac"]
     out = {}
     for m in metrics:
         cv, pv_ = cur.get(m), (prev or {}).get(m)
@@ -120,7 +126,7 @@ def compare(cur: dict, prev: dict | None) -> dict:
             row["delta_pct"] = round((cv - pv_) / pv_, 4) if pv_ else None
             if m in RATE_METRICS:
                 row["delta_pp"] = round((cv - pv_) * 100, 2)
-            higher_is_better = m not in ("spend", "cpm", "cpl", "cpmql", "cac")
+            higher_is_better = m not in ("spend", "cpm", "cpl", "cpmql", "cpag", "cpproposta", "cac")
             if abs(cv - pv_) < 1e-9:
                 row["direcao"] = "estavel"
             else:

@@ -219,12 +219,9 @@ editou no painel (fica em `localStorage`).
 
 Funil completo: `Impressões → Cliques → Page View → Leads → MQLs → Agendamentos
 → Vendas`. Sem etapa de comparecimento (agendamento via WhatsApp, fora da mídia
-paga) — a responsabilidade do tráfego termina no MQL. Impressões/Cliques/Page
-View/Leads/MQLs/Vendas/Faturamento já estão conectados e cruzados; só
-**Agendamentos** não tem fonte conectada ainda (precisa da lista/planilha do
-comercial) — Taxa de Agendamento, Custo por Agendamento e Taxa de Vendas (que usa
-Agendamentos como denominador) aparecem "-" até essa fonte ser conectada, mesmo
-com CAC e Faturamento já disponíveis via Vendas.
+paga) — a responsabilidade do tráfego termina no MQL. Todas as etapas estão
+conectadas e cruzadas — Agendamentos/Propostas via CRM comercial (ver
+"Agendamentos & Propostas" abaixo).
 
 ### Link do criativo (aba de mídia paga)
 `build.py` lê uma coluna opcional de permalink do criativo na aba de mídia →
@@ -273,13 +270,34 @@ ordenação tri‑state; colunas redimensionáveis (persist localStorage); linha
 filtro cruzado bidirecional; tabela diária com último dia no topo; heatmap de cor
 fixa por métrica.
 
-## Lacunas de dados (comuns até o cliente enviar mais fontes)
-- **Agendamentos** → precisam da lista/planilha do comercial (agendamento via
-  WhatsApp); aparecem "-". Taxa de Agendamento, Custo por Agendamento e Taxa de
-  Vendas (denominador = Agendamentos) ficam "-" até essa fonte ser conectada —
-  ver GARGALO DE DADO nos Insights de Tráfego (`build/GUIA-RELATORIOS.md`).
-- Page Views (Connect Rate/ConvLP) e Vendas/Faturamento (CAC) **já estão
-  conectados** nesse cliente — não são lacuna.
+## Agendamentos & Propostas (CRM comercial)
+Mesma planilha do Funil, abas **`Comercial_Leads`** (1 linha por lead do CRM:
+`lead_id`, `marketing_lead_id` = `Leads.id`, `whatsapp`, `funil_codigo`,
+`etapa_atual_codigo`, `data_etapa_atual`, `valor_proposta`…) e
+**`Comercial_Etapas`** (histórico: `lead_id`, `funil_codigo`, `etapa_codigo`,
+`entrou_em`). Etapas do funil `metodo_ral` (`COM_FUNIL`): `formulario` →
+`reuniao_agendada` → `proposta_enviada` → `fechado` / `perdido` (o funil
+`consultoria` é outro produto e fica de fora).
+
+`build.py::build_commercial()` liga lead do CRM → lead do funil por
+`marketing_lead_id` (fallback telefone canônico) — lead do CRM que não casa
+fica fora — e emite `DATA.com[]`: 1 registro por lead do funil por etapa
+alcançada (`{d, src, camp, adset, ad, ag:1}` / `{…, pr:1}`), **cumulativo**
+(quem chegou em proposta/fechado também conta como agendado), com `d` = 1ª
+entrada na etapa (fallback: etapa atual da `Comercial_Leads`). No navegador
+`SALES = sales.concat(com)`, então agendamentos/propostas seguem os mesmos
+filtros de data/origem/campanha das vendas; `salesOf()` dá `txag` (÷MQLs),
+`cpag`, `txprop` (÷agendamentos), `cpprop`. Aparecem nos funis, tabelas diárias,
+hierarquias, Top/Piores e na página ChatGPT. `coletar_dados_relatorio.py` passa
+`sales + com` para `relatorio_lib.agg()` (campos `agendamentos`, `propostas`,
+`txag`, `cpag`, `cpproposta`, `txvendas`).
+
+As abas comerciais têm muitas colunas vazias: sem `&headers=1` na URL do gviz
+(`EXPORT_URL`), o Google funde o cabeçalho com a 1ª linha e a leitura quebra.
+
+## Lacunas de dados
+- Nenhuma etapa do funil sem fonte hoje. Page Views, Agendamentos/Propostas e
+  Vendas/Faturamento estão conectados.
 
 ## Publicação — problemas conhecidos
 1. **Push:** se a integração GitHub da sessão for somente‑leitura (403), o caminho

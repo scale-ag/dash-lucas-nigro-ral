@@ -1,6 +1,6 @@
 "use strict";
 const DATA = JSON.parse(document.getElementById('payload').textContent);
-const LEADS = DATA.leads, META = DATA.meta, SALES = DATA.sales||[], B = DATA.build;
+const LEADS = DATA.leads, META = DATA.meta, SALES = (DATA.sales||[]).concat(DATA.com||[]), B = DATA.build;
 const TAX = B.tax_factor || 1.0;
 
 /* ---------------- format ---------------- */
@@ -61,8 +61,8 @@ function derive(a){
    por telefone) — um registro POR COMPRA, na data REAL da compra (nunca a data da
    conversa). `salesActive()` filtra por essa data e se propaga em
    buildAgg/daily/totals junto com fL/fM, acendendo funil, cards, colunas das
-   tabelas e Top/Piores anúncios. Agendamentos/Reuniões Realizadas não têm fonte
-   neste cliente — ficam null -> "-" até existir lista do comercial. */
+   tabelas e Top/Piores anúncios. Agendamentos/propostas vêm de DATA.com (CRM
+   comercial, concatenado em SALES); Reuniões Realizadas não têm fonte (null -> "-"). */
 function salesOf(a){
   const g=(a?a.sp:0)*taxf();
   const mqls=(a&&a.mqls)||0;
@@ -74,6 +74,9 @@ function salesOf(a){
     agendamentos: hasAg?agendamentos:null,
     txag:         hasAg&&mqls?agendamentos/mqls:null,     // agendamentos / MQLs
     cpag:         hasAg?g/agendamentos:null,               // custo por agendamento
+    propostas:    (a&&a.propostas)?a.propostas:null,
+    txprop:       hasAg&&a.propostas?a.propostas/agendamentos:null,   // propostas / agendamentos
+    cpprop:       (a&&a.propostas)?g/a.propostas:null,                  // custo por proposta enviada
     // Agendamento → Reunião Realizada
     reunioes:     hasRe?reunioes:null,
     txnoshow:     hasRe&&hasAg?1-(reunioes/agendamentos):null,  // no-show = 1 - comparecimento
@@ -93,25 +96,26 @@ function salesOf(a){
 }
 function buildAgg(fL,fM,fS,dim){
   const m={};
-  const get=k=>m[k]||(m[k]={sp:0,im:0,cl:0,pv:0,chk:0,leads:0,mqls:0,vendas:0,fat:0,receita:0});
+  const get=k=>m[k]||(m[k]={sp:0,im:0,cl:0,pv:0,chk:0,leads:0,mqls:0,vendas:0,fat:0,receita:0,agendamentos:0,propostas:0});
   fM.forEach(r=>{const a=get(r[dim]); a.sp+=r.sp; a.im+=r.im; a.cl+=r.cl; a.pv+=r.pv; a.chk+=r.ck||0;});
   fL.forEach(r=>{const a=get(r[dim]); a.leads+=1; a.mqls+=r.q;});
-  fS.forEach(r=>{const a=get(r[dim]); a.vendas+=r.vendas||0; a.fat+=r.fat||0; a.receita+=r.receita||0;});
+  fS.forEach(r=>{const a=get(r[dim]); a.vendas+=r.vendas||0; a.fat+=r.fat||0; a.receita+=r.receita||0; a.agendamentos+=r.ag||0; a.propostas+=r.pr||0;});
   return m;
 }
 function totals(fL,fM,fS){
   let sp=0,im=0,cl=0,pv=0,chk=0; fM.forEach(r=>{sp+=r.sp;im+=r.im;cl+=r.cl;pv+=r.pv;chk+=r.ck||0;});
   return {sp, im, cl, pv, chk, leads:fL.length, mqls:fL.reduce((s,r)=>s+r.q,0),
     vendas:fS.reduce((s,r)=>s+(r.vendas||0),0), fat:fS.reduce((s,r)=>s+(r.fat||0),0),
-    receita:fS.reduce((s,r)=>s+(r.receita||0),0)};
+    receita:fS.reduce((s,r)=>s+(r.receita||0),0),
+    agendamentos:fS.reduce((s,r)=>s+(r.ag||0),0), propostas:fS.reduce((s,r)=>s+(r.pr||0),0)};
 }
 /* daily aggregation for a source pair. `d` (data da venda) é a data REAL da
    compra (aba Compradores), não a data da conversa — ver build.py::process. */
 function daily(fL,fM,fS){
-  const days={}; const g=d=>days[d]||(days[d]={d, sp:0,im:0,cl:0,pv:0,chk:0,leads:0,mqls:0,vendas:0,fat:0,receita:0});
+  const days={}; const g=d=>days[d]||(days[d]={d, sp:0,im:0,cl:0,pv:0,chk:0,leads:0,mqls:0,vendas:0,fat:0,receita:0,agendamentos:0,propostas:0});
   fM.forEach(r=>{if(!r.d)return; const a=g(r.d); a.sp+=r.sp; a.im+=r.im; a.cl+=r.cl; a.pv+=r.pv; a.chk+=r.ck||0;});
   fL.forEach(r=>{if(!r.d)return; const a=g(r.d); a.leads+=1; a.mqls+=r.q;});
-  fS.forEach(r=>{if(!r.d)return; const a=g(r.d); a.vendas+=r.vendas||0; a.fat+=r.fat||0; a.receita+=r.receita||0;});
+  fS.forEach(r=>{if(!r.d)return; const a=g(r.d); a.vendas+=r.vendas||0; a.fat+=r.fat||0; a.receita+=r.receita||0; a.agendamentos+=r.ag||0; a.propostas+=r.pr||0;});
   return Object.values(days).sort((a,b)=>a.d<b.d?-1:1);
 }
 
@@ -551,6 +555,8 @@ function renderGeralCore(ids){
     ['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]],
     ['Leads', intf(t.leads), [['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]],
     ['MQLs (Qualificados)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql'],
+    ['Agendamentos', intf(t.agendamentos), [['Tx‑Agend.',pct(s.txag)],['Custo/Agend.',brl(s.cpag)]]],
+    ['Propostas enviadas', intf(t.propostas), [['Tx‑Proposta',pct(s.txprop)],['Custo/Proposta',brl(s.cpprop)]]],
     ['Vendas', s.vendas!=null?intf(s.vendas):NA, [['ConvMQL',s.convmql!=null?pct(s.convmql):NA],['CAC',s.cac!=null?brl(s.cac):NA]], s.vendas==null],
     ['Receita', s.receita!=null?brl(s.receita):NA, [['ROAS',s.roasReceita!=null?numf(s.roasReceita):NA],['Ticket',s.tmReceita!=null?brl(s.tmReceita):NA]], s.receita==null, 'hl-fat'],
     ['Faturamento', s.fat!=null?brl(s.fat):NA, [['ROAS',s.roas!=null?numf(s.roas):NA],['Ticket',s.tm!=null?brl(s.tm):NA]], s.fat==null, 'hl-fat'],
@@ -700,6 +706,7 @@ function adRowCells(ad,a,struct){
   return {ad, camp:struct.camp, adset:struct.adset,
     gasto:d.gasto, im:a.im, cpm:d.cpm, ctr:d.ctr,
     leads:a.leads, cpl:d.cpl, mqls:a.mqls, tx:d.tx, cpmql:d.cpmql,
+    ag:a.agendamentos, cpag:s.cpag, pr:a.propostas,
     convmql:s.convmql, vendas:s.vendas, cac:s.cac, fat:s.fat, roas:s.roas,
     link:adLinkCell(ad),
     _cpmql:d.cpmql, _cac:s.cac, status:null};   // valores crus p/ colorir vs meta
@@ -715,6 +722,8 @@ function relRenderAdTable(id,list){
     {key:'leads',label:'Leads',type:'int'},{key:'cpl',label:'CPL',type:'brl'},
     {key:'mqls',label:'MQLs',type:'int'},{key:'tx',label:'Tx‑MQL',type:'pct'},
     {key:'cpmql',label:'CPMQL',type:'brl'},
+    {key:'ag',label:'Agend.',type:'int'},{key:'cpag',label:'C/Agend.',type:'brl'},
+    {key:'pr',label:'Propostas',type:'int'},
     {key:'convmql',label:'ConvMQL',type:'pct'},
     {key:'vendas',label:'Vendas',type:'int'},
     {key:'cac',label:'CAC',type:'brl'},
@@ -837,6 +846,8 @@ const DAILY_COLS=[
   {key:'ctr',label:'CTR',type:'pct'},{key:'cr',label:'CR',type:'pct'},{key:'convlp',label:'ConvLP',type:'pct'},
   {key:'leads',label:'Leads',type:'int',heat:'leads'},{key:'cpl',label:'CPL',type:'brl'},
   {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'mqls',label:'MQLs',type:'int',heat:'mqls'},{key:'cpmql',label:'CPMQL',type:'brl'},
+  {key:'ag',label:'Agend.',type:'int'},{key:'cpag',label:'C/Agend.',type:'brl'},
+  {key:'pr',label:'Propostas',type:'int'},{key:'cppr',label:'C/Proposta',type:'brl'},
   {key:'chk',label:'Checkouts',type:'int',w:104},{key:'vischk',label:'VisCHK',type:'pct'},
   {key:'convmql',label:'ConvMQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int',heat:'vendas'},{key:'cac',label:'CAC',type:'brl'},
   {key:'fat',label:'Fat.',type:'brl'},{key:'receita',label:'Receita',type:'brl'},{key:'roas',label:'ROAS',type:'num',heat:'roas'},
@@ -846,6 +857,7 @@ function dailyCells(x,d,isTotal){
   return {date:isTotal?null:x.d, wd:isTotal?'':weekday(x.d), gasto:d.gasto, cpm:d.cpm, ctr:d.ctr, cr:d.cr, convlp:d.convlp,
     chk:d.chk, vischk:d.vischk,
     leads:x.leads, cpl:d.cpl, tx:d.tx, mqls:x.mqls, cpmql:d.cpmql,
+    ag:x.agendamentos, cpag:s.cpag, pr:x.propostas, cppr:s.cpprop,
     convmql:s.convmql, vendas:s.vendas, cac:s.cac, fat:s.fat, receita:s.receita, roas:s.roas};
 }
 
@@ -879,6 +891,8 @@ function renderMeta(){
     ['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]],
     ['Leads', intf(t.leads), [['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]],
     ['MQLs (Qualificados)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql'],
+    ['Agendamentos', intf(t.agendamentos), [['Tx‑Agend.',pct(s.txag)],['Custo/Agend.',brl(s.cpag)]]],
+    ['Propostas enviadas', intf(t.propostas), [['Tx‑Proposta',pct(s.txprop)],['Custo/Proposta',brl(s.cpprop)]]],
     ['Vendas', s.vendas!=null?intf(s.vendas):NA, [['ConvMQL',s.convmql!=null?pct(s.convmql):NA],['CAC',s.cac!=null?brl(s.cac):NA]], s.vendas==null],
     ['Receita', s.receita!=null?brl(s.receita):NA, [['ROAS',s.roasReceita!=null?numf(s.roasReceita):NA],['Ticket',s.tmReceita!=null?brl(s.tmReceita):NA]], s.receita==null, 'hl-fat'],
     ['Faturamento', s.fat!=null?brl(s.fat):NA, [['ROAS',s.roas!=null?numf(s.roas):NA],['Ticket',s.tm!=null?brl(s.tm):NA]], s.fat==null, 'hl-fat'],
@@ -926,14 +940,16 @@ function renderMeta(){
     {key:'leads',label:'Leads',type:'int'},{key:'cpl',label:'CPL',type:'brl'},
     {key:'tx',label:'Tx‑MQL',type:'pct'},
     {key:'mqls',label:'MQLs',type:'int'},{key:'cpmql',label:'CPMQL',type:'brl'},
+    {key:'ag',label:'Agend.',type:'int'},{key:'cpag',label:'C/Agend.',type:'brl'},
+    {key:'pr',label:'Propostas',type:'int'},{key:'cppr',label:'C/Proposta',type:'brl'},
     {key:'convmql',label:'ConvMQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int'},{key:'cac',label:'CAC',type:'brl'},
     {key:'fat',label:'Fat.',type:'brl'},{key:'receita',label:'Receita',type:'brl'},{key:'roas',label:'ROAS',type:'num'},
   ];
   function hierRows(map){ return Object.entries(map).map(([k,a])=>{const d=derive(a),s=salesOf(a);
     return {k, cells:{dim:k,gasto:d.gasto,cpm:d.cpm,ctr:d.ctr,cr:d.cr,convlp:d.convlp,leads:a.leads,cpl:d.cpl,tx:d.tx,mqls:a.mqls,cpmql:d.cpmql,
-      convmql:s.convmql,vendas:s.vendas,cac:s.cac,fat:s.fat,receita:s.receita,roas:s.roas}};}); }
+      ag:a.agendamentos,cpag:s.cpag,pr:a.propostas,cppr:s.cpprop,convmql:s.convmql,vendas:s.vendas,cac:s.cac,fat:s.fat,receita:s.receita,roas:s.roas}};}); }
   function totRowOf(tt){const d=derive(tt),s=salesOf(tt);return{dim:null,gasto:d.gasto,cpm:d.cpm,ctr:d.ctr,cr:d.cr,convlp:d.convlp,leads:tt.leads,cpl:d.cpl,tx:d.tx,mqls:tt.mqls,cpmql:d.cpmql,
-    convmql:s.convmql,vendas:s.vendas,cac:s.cac,fat:s.fat,receita:s.receita,roas:s.roas};}
+    ag:tt.agendamentos,cpag:s.cpag,pr:tt.propostas,cppr:s.cpprop,convmql:s.convmql,vendas:s.vendas,cac:s.cac,fat:s.fat,receita:s.receita,roas:s.roas};}
   const Sc=metaScope('C'), Sa=metaScope('A'), Sd=metaScope('D');
   const aggC=buildAgg(Sc.fL,Sc.fM,Sc.fS,'camp'), aggA=buildAgg(Sa.fL,Sa.fM,Sa.fS,'adset'), aggD=buildAgg(Sd.fL,Sd.fM,Sd.fS,'ad');
   // Tabelas hierárquicas: NÃO usam "fit" — a dimensão (campanha/conjunto/anúncio)
@@ -1003,6 +1019,8 @@ function renderGpt(){
   const steps=[
     ['Leads ChatGPT Ads', intf(t.leads), [['% do total',pct(allLeads?t.leads/allLeads:null)],['CPL',NA]]],
     ['MQLs (Qualificados)', intf(t.mqls), [['Tx‑MQL',pct(tx)],['CPMQL',NA]], false, 'hl-mql'],
+    ['Agendamentos', intf(t.agendamentos), [['Tx‑Agend.',pct(s.txag)],['Custo/Agend.',NA]]],
+    ['Propostas enviadas', intf(t.propostas), [['Tx‑Proposta',pct(s.txprop)],['Custo/Proposta',NA]]],
     ['Vendas', s.vendas!=null?intf(s.vendas):'0', [['ConvMQL',s.convmql!=null?pct(s.convmql):'-'],['CAC',NA]]],
     ['Faturamento', s.fat!=null?brl(s.fat):brl(0), [['Ticket',s.tm!=null?brl(s.tm):'-']], false, 'hl-fat'],
   ];
@@ -1013,11 +1031,12 @@ function renderGpt(){
   const gcols=[
     {key:'date',label:'Data',type:'date'},{key:'wd',label:'Dia',type:'dim',w:70},
     {key:'leads',label:'Leads',type:'int',heat:'leads'},{key:'mqls',label:'MQLs',type:'int',heat:'mqls'},
-    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int',heat:'vendas'},
+    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'ag',label:'Agend.',type:'int'},{key:'pr',label:'Propostas',type:'int'},
+    {key:'vendas',label:'Vendas',type:'int',heat:'vendas'},
     {key:'convmql',label:'ConvMQL',type:'pct'},{key:'fat',label:'Fat.',type:'brl'},
   ];
   const dayCells=(x,isTotal)=>{const ss=salesOf(x); return {date:isTotal?null:x.d, wd:isTotal?'':weekday(x.d),
-    leads:x.leads, mqls:x.mqls, tx:x.leads?x.mqls/x.leads:null, vendas:ss.vendas, convmql:ss.convmql, fat:ss.fat};};
+    leads:x.leads, mqls:x.mqls, tx:x.leads?x.mqls/x.leads:null, ag:x.agendamentos, pr:x.propostas, vendas:ss.vendas, convmql:ss.convmql, fat:ss.fat};};
   renderTable({id:'gptDaily', cols:gcols, center:true,
     rows:dd.slice().reverse().map(x=>({k:x.d, cells:dayCells(x)})),
     total:dayCells({...t,d:null},true),
@@ -1032,10 +1051,11 @@ function renderGpt(){
 
   const hcols=[
     {key:'dim',label:'',type:'dim',big:true},{key:'leads',label:'Leads',type:'int'},{key:'mqls',label:'MQLs',type:'int'},
-    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int'},{key:'convmql',label:'ConvMQL',type:'pct'},
+    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'ag',label:'Agend.',type:'int'},{key:'pr',label:'Propostas',type:'int'},
+    {key:'vendas',label:'Vendas',type:'int'},{key:'convmql',label:'ConvMQL',type:'pct'},
     {key:'fat',label:'Fat.',type:'brl'},
   ];
-  const cellsOf=(k,a)=>{const ss=salesOf(a); return {dim:k,leads:a.leads,mqls:a.mqls,tx:a.leads?a.mqls/a.leads:null,
+  const cellsOf=(k,a)=>{const ss=salesOf(a); return {dim:k,leads:a.leads,mqls:a.mqls,tx:a.leads?a.mqls/a.leads:null,ag:a.agendamentos,pr:a.propostas,
     vendas:ss.vendas,convmql:ss.convmql,fat:ss.fat};};
   [['C','camp','gptCamp','Campanha',STATE.gSelC],['A','adset','gptAdset','Conjunto',STATE.gSelA],['D','ad','gptAd','Anúncio',STATE.gSelAd]]
     .forEach(([dc,dim,id,label,set])=>{

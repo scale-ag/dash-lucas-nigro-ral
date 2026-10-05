@@ -156,10 +156,8 @@ demais ou o lead ainda precisa de nutrição antes de agendar.
 
 **Cruzar com:** CPMQL, Taxa de Vendas, CAC.
 
-> **Fonte de dado:** Agendamentos não têm fonte conectada neste dashboard
-> ainda (não há aba de comercial/WhatsApp integrada) — Taxa de Agendamento e
-> Custo por Agendamento aparecem "-" até essa fonte ser conectada. Ver
-> "Gargalo de dado" em `GUIA-RELATORIOS.md`.
+> **Fonte de dado:** CRM comercial (abas `Comercial_Leads`/`Comercial_Etapas`,
+> etapa "Reunião agendada" do funil `metodo_ral`), cruzado com a aba Leads.
 
 ## Custo por Agendamento (Investimento ÷ Agendamentos)
 
@@ -196,10 +194,8 @@ depois.
 
 **Cruzar com:** TxMQL, Taxa de Agendamento, CAC.
 
-> **Fonte de dado:** como o denominador é Agendamentos (sem fonte
-> conectada), Taxa de Vendas aparece "-" mesmo quando o número absoluto de
-> Vendas está disponível (a aba Vendas já está conectada e cruzada com
-> Leads). Ver "Gargalo de dado" em `GUIA-RELATORIOS.md`.
+> **Fonte de dado:** Vendas (aba Vendas) ÷ Agendamentos (CRM comercial),
+> ambos cruzados com a aba Leads.
 
 ## CAC (Investimento ÷ Vendas)
 
@@ -215,10 +211,8 @@ que não entra nessa conta.
 
 **Cruzar com:** Taxa de Vendas, Taxa de Agendamento, CPMQL.
 
-> **Fonte de dado:** CAC **é calculável** — a aba Vendas já está conectada e
-> cruzada com Leads (por `lead_id`, com fallback por telefone), então o
-> número absoluto de Vendas e o Investimento÷Vendas funcionam mesmo sem a
-> fonte de Agendamentos.
+> **Fonte de dado:** aba Vendas, cruzada com Leads (por `lead_id`, com
+> fallback por telefone).
 
 ## Regras gerais de interpretação
 
@@ -243,9 +237,8 @@ que não entra nessa conta.
   conectada (ex: aguardando planilha do comercial), isso é **prioridade
   alta** e deve aparecer destacado — porque sem essa informação, CAC e
   Taxa de Vendas ficam "-" e qualquer decisão de otimização depois do MQL é
-  decisão às cegas. Hoje, especificamente, Agendamentos não tem fonte
-  conectada (Vendas/Faturamento já têm, via aba Vendas) — ver
-  `GUIA-RELATORIOS.md` → "Gargalo de dado".
+  decisão às cegas. Hoje todas estão conectadas (Agendamentos via CRM
+  comercial, Vendas/Faturamento via aba Vendas).
 
 ## Fase de calibração
 

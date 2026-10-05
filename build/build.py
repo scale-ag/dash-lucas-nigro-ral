@@ -49,10 +49,17 @@ from datetime import datetime, timezone, timedelta
 SPREADSHEET_ID_FUNIL = "1j3EQE4zbRlUVAKyDPTmlnTDP0Jlvw-enQyMPR2LXjfk"
 SHEET_LEADS = "Leads"
 SHEET_VENDAS = "Vendas"
+# CRM comercial (mesma planilha): lead do CRM -> lead do funil (marketing_lead_id
+# = Leads.id) e histórico de etapas. Só conta o funil do produto (metodo_ral).
+SHEET_COM_LEADS = "Comercial_Leads"
+SHEET_COM_ETAPAS = "Comercial_Etapas"
+COM_FUNIL = "metodo_ral"
 # Planilha do Meta Ads (separada da planilha do Funil).
 SPREADSHEET_ID_META = "1xb5itNu9_No6keCKHyzG7qIPobT46BqfmJ_rP0v4h8c"
 SHEET_META = "Página 1"
-EXPORT_URL = "https://docs.google.com/spreadsheets/d/{sid}/gviz/tq?tqx=out:csv&sheet={sheet}"
+# headers=1: sem ele o gviz funde o cabeçalho com a 1ª linha quando a aba tem
+# muitas colunas vazias (acontecia na Comercial_Leads).
+EXPORT_URL = "https://docs.google.com/spreadsheets/d/{sid}/gviz/tq?tqx=out:csv&headers=1&sheet={sheet}"
 
 # Identificação do cliente/conta (usada só em textos/relatórios — não afeta o cruzamento de dados).
 CLIENT_NAME = "Lucas Nigro"
@@ -342,7 +349,79 @@ def log_unmatched_sales(matched: int, total: int, unmatched: list[dict]):
 # --------------------------------------------------------------------------- #
 # Processamento -> registros brutos
 # --------------------------------------------------------------------------- #
-def process(leads_rows, meta_rows, sales_rows):
+AGEND_ETAPAS = ("reuniao_agendada", "proposta_enviada", "fechado")
+PROPOSTA_ETAPAS = ("proposta_enviada", "fechado")
+
+
+def build_commercial(com_leads_rows, com_etapas_rows, id_attrib, phone_attrib):
+    """Agendamentos e propostas do CRM comercial, um registro por lead do funil
+    por etapa alcançada: [{d, src, camp, adset, ad, ag|pr: 1}, ...].
+
+    Lead do CRM -> lead do funil por `marketing_lead_id` (= Leads.id) ou, na
+    ausência, pelo telefone canônico; lead do CRM que não casa fica de fora
+    (mesma regra das vendas). Etapas são cumulativas: quem chegou em proposta
+    também conta como agendado. Data = 1ª entrada na etapa (Comercial_Etapas,
+    só funil COM_FUNIL); sem histórico, usa a etapa atual da Comercial_Leads."""
+    if not com_leads_rows:
+        return []
+    cidx = header_index(
+        com_leads_rows[0],
+        {"id": ["lead_id"], "mk": ["marketing_lead_id"], "phone": ["whatsapp"], "funil": ["funil_codigo"],
+         "etapa": ["etapa_atual_codigo"], "d_etapa": ["data_etapa_atual"]},
+        {"id": 0, "mk": 1, "phone": 4, "funil": 7, "etapa": 10, "d_etapa": 12},
+    )
+    crm = {}
+    for row in com_leads_rows[1:]:
+        lid, mk = cell(row, cidx["id"]), cell(row, cidx["mk"])
+        attrib = id_attrib.get(mk) if mk else None
+        if attrib is None:
+            attrib = phone_attrib.get(canon_phone(cell(row, cidx["phone"])))
+        if lid and attrib is not None:
+            crm[lid] = {"attrib": attrib, "funil": cell(row, cidx["funil"]), "etapa": cell(row, cidx["etapa"]),
+                        "d_etapa": parse_date_brt(cell(row, cidx["d_etapa"]))}
+
+    # etapas alcançadas por lead do FUNIL (vários leads do CRM podem apontar
+    # pro mesmo lead do funil): {key: {etapa: 1a data}}
+    reached: dict[str, dict[str, str | None]] = {}
+    attrib_of: dict[str, dict] = {}
+
+    def mark(c, etapa, dt):
+        k = c["attrib"]["key"]
+        attrib_of[k] = c["attrib"]
+        st = reached.setdefault(k, {})
+        if etapa not in st or (dt and (st[etapa] is None or dt < st[etapa])):
+            st[etapa] = dt
+
+    if com_etapas_rows:
+        eidx = header_index(
+            com_etapas_rows[0],
+            {"id": ["lead_id"], "funil": ["funil_codigo"], "etapa": ["etapa_codigo"], "d": ["entrou_em"]},
+            {"id": 1, "funil": 3, "etapa": 6, "d": 8},
+        )
+        for row in com_etapas_rows[1:]:
+            c = crm.get(cell(row, eidx["id"]))
+            if c and cell(row, eidx["funil"]) == COM_FUNIL:
+                mark(c, cell(row, eidx["etapa"]), parse_date_brt(cell(row, eidx["d"])))
+    for c in crm.values():
+        if c["funil"] == COM_FUNIL and c["etapa"] and c["etapa"] not in reached.get(c["attrib"]["key"], {}):
+            mark(c, c["etapa"], c["d_etapa"])
+
+    out = []
+    for k, st in reached.items():
+        a = attrib_of[k]
+        base = {"src": a["src"], "camp": a["camp"], "adset": a["adset"], "ad": a["ad"]}
+        for field, etapas in (("ag", AGEND_ETAPAS), ("pr", PROPOSTA_ETAPAS)):
+            hit = [e for e in etapas if e in st]
+            if hit:
+                d = next((st[e] for e in hit if st[e]), None)
+                out.append({**base, "d": d, field: 1})
+    print(f"  comercial: {len(crm)} leads do CRM casados com o funil | "
+          f"agendamentos: {sum(r.get('ag', 0) for r in out)} | propostas: {sum(r.get('pr', 0) for r in out)}",
+          file=sys.stderr)
+    return out
+
+
+def process(leads_rows, meta_rows, sales_rows, com_leads_rows=None, com_etapas_rows=None):
     lheader = leads_rows[0] if leads_rows else []
     lidx = header_index(
         lheader,
@@ -388,7 +467,7 @@ def process(leads_rows, meta_rows, sales_rows):
         lead_date = parse_date_brt(cell(row, lidx["created"]))
         lead_id = cell(row, lidx["id"])
         phone = canon_phone(cell(row, lidx["phone"]))
-        attrib = {"src": src, "camp": camp, "adset": adset, "ad": ad, "d": lead_date}
+        attrib = {"src": src, "camp": camp, "adset": adset, "ad": ad, "d": lead_date, "key": lead_id or phone}
         if lead_id:
             id_attrib[lead_id] = attrib
         if phone and phone not in phone_attrib:
@@ -441,6 +520,7 @@ def process(leads_rows, meta_rows, sales_rows):
         })
 
     log_unmatched_sales(matched, len(purchases), unmatched)
+    com = build_commercial(com_leads_rows, com_etapas_rows, id_attrib, phone_attrib)
 
     mheader = meta_rows[0] if meta_rows else []
     midx = header_index(
@@ -484,6 +564,7 @@ def process(leads_rows, meta_rows, sales_rows):
 
     dates = sorted({d for d in (
         [l["d"] for l in leads if l["d"]] + [m["d"] for m in meta if m["d"]] + [s["d"] for s in sales if s["d"]]
+        + [c["d"] for c in com if c["d"]]
     )})
     now_brt = datetime.now(BRT)
     return {
@@ -507,6 +588,8 @@ def process(leads_rows, meta_rows, sales_rows):
         "leads": leads,
         "meta": meta,
         "sales": sales,
+        # Agendamentos/propostas do CRM comercial (build_commercial).
+        "com": com,
         # Anúncio -> permalink do criativo (aba Relatório).
         "ad_links": ad_links,
         # Insights de Tráfego (texto pré-escrito, lido de relatorios.json). Preenchido
@@ -566,6 +649,8 @@ def main():
     ap.add_argument("--leads-file", help="CSV local da aba Leads (fonte única de leads)")
     ap.add_argument("--meta-file", help="CSV local da aba Página 1 (Meta Ads)")
     ap.add_argument("--sales-file", help="CSV local da aba Vendas (Compradores)")
+    ap.add_argument("--com-leads-file", help="CSV local da aba Comercial_Leads")
+    ap.add_argument("--com-etapas-file", help="CSV local da aba Comercial_Etapas")
     ap.add_argument("--template", default="build/template.html")
     ap.add_argument("--out", default="dist/index.html")
     args = ap.parse_args()
@@ -573,8 +658,10 @@ def main():
     leads_rows = load_rows(sheet_url(SPREADSHEET_ID_FUNIL, SHEET_LEADS), args.leads_file)
     sales_rows = load_rows(sheet_url(SPREADSHEET_ID_FUNIL, SHEET_VENDAS), args.sales_file)
     meta_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META), args.meta_file)
+    com_leads_rows = load_rows(sheet_url(SPREADSHEET_ID_FUNIL, SHEET_COM_LEADS), args.com_leads_file)
+    com_etapas_rows = load_rows(sheet_url(SPREADSHEET_ID_FUNIL, SHEET_COM_ETAPAS), args.com_etapas_file)
 
-    data = process(leads_rows, meta_rows, sales_rows)
+    data = process(leads_rows, meta_rows, sales_rows, com_leads_rows, com_etapas_rows)
 
     # Insights de Tráfego (texto pré-escrito) — lidos do arquivo versionado ao
     # lado do template. Sem chamada de API no build.
