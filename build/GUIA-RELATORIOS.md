@@ -77,7 +77,7 @@ gráficos, Top/Piores Anúncios — segue funcionando normalmente).
 Financeiros Empresariais | Método RaL", via formulário de captura):
 
 ```
-Impressões → Cliques → Page View → Leads → MQLs → Agendamentos → Vendas
+Impressões → Cliques → Page View → Leads → MQLs → Reuniões agendadas → Propostas → Vendas
 ```
 
 - O anúncio no Meta Ads leva a uma landing page; a visita gera **Page View**
@@ -98,11 +98,21 @@ Impressões → Cliques → Page View → Leads → MQLs → Agendamentos → Ve
   origem por `lead_id` (fallback por telefone) — **já conectada**.
 
 > **Estado atual dos dados:** Impressões → Cliques → Page View → Leads →
-> MQLs → Agendamentos → Propostas → Vendas estão todos conectados e
-> cruzados (`fontes_conectadas` tudo `true`). Agendamentos/propostas só
-> contam leads do CRM que casam com um lead da aba Leads (por
-> `marketing_lead_id` ou telefone), na data em que entraram na etapa — o
-> volume ainda é pequeno, então trate as taxas como sinal, não conclusão.
+> MQLs → Reuniões agendadas (campo `agendamentos`) → Propostas → Vendas estão
+> todos conectados (`fontes_conectadas` tudo `true`). Regras (combinadas com o
+> cliente em 16/10/2026):
+> - Reuniões/propostas vêm do CRM (funil `metodo_ral`, só registros ativos,
+>   só eventos `real`/`inferida` — histórico importado `desconhecida` não
+>   conta). Quem chegou em proposta ou fechado conta como reunião; a etiqueta
+>   "Agendar reunião" não conta.
+> - **Modo coorte:** reuniões, propostas e vendas contam no dia em que o lead
+>   ENTROU (não no dia da etapa). Os números dos dias recentes ainda vão
+>   crescer conforme os leads avançam — leve isso em conta antes de dizer
+>   que uma taxa caiu.
+> - Vendas vêm da aba Vendas (pagas, produto Formação), atribuídas pelo
+>   `lead_id`. Lead do CRM ou venda sem ligação com a aba Leads conta no
+>   total, sem campanha (não aparece em `por_campanha`/`por_conjunto`).
+> - O volume ainda é pequeno: trate as taxas como sinal, não conclusão.
 
 ## Fórmulas fundamentais
 

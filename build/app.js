@@ -61,8 +61,9 @@ function derive(a){
    por telefone) — um registro POR COMPRA, na data REAL da compra (nunca a data da
    conversa). `salesActive()` filtra por essa data e se propaga em
    buildAgg/daily/totals junto com fL/fM, acendendo funil, cards, colunas das
-   tabelas e Top/Piores anúncios. Agendamentos/propostas vêm de DATA.com (CRM
-   comercial, concatenado em SALES); Reuniões Realizadas não têm fonte (null -> "-"). */
+   tabelas e Top/Piores anúncios. Reuniões agendadas (campo `agendamentos`) e
+   propostas vêm de DATA.com (CRM comercial, concatenado em SALES). Tudo em modo
+   coorte: datado no dia de entrada do lead. Reuniões Realizadas não têm fonte. */
 function salesOf(a){
   const g=(a?a.sp:0)*taxf();
   const mqls=(a&&a.mqls)||0;
@@ -75,6 +76,7 @@ function salesOf(a){
     txag:         hasAg&&mqls?agendamentos/mqls:null,     // agendamentos / MQLs
     cpag:         hasAg?g/agendamentos:null,               // custo por agendamento
     propostas:    (a&&a.propostas)?a.propostas:null,
+    txvprop:      hasVd&&a.propostas?vendas/a.propostas:null,          // vendas / propostas
     txprop:       hasAg&&a.propostas?a.propostas/agendamentos:null,   // propostas / agendamentos
     cpprop:       (a&&a.propostas)?g/a.propostas:null,                  // custo por proposta enviada
     // Agendamento → Reunião Realizada
@@ -107,7 +109,8 @@ function totals(fL,fM,fS){
   return {sp, im, cl, pv, chk, leads:fL.length, mqls:fL.reduce((s,r)=>s+r.q,0),
     vendas:fS.reduce((s,r)=>s+(r.vendas||0),0), fat:fS.reduce((s,r)=>s+(r.fat||0),0),
     receita:fS.reduce((s,r)=>s+(r.receita||0),0),
-    agendamentos:fS.reduce((s,r)=>s+(r.ag||0),0), propostas:fS.reduce((s,r)=>s+(r.pr||0),0)};
+    agendamentos:fS.reduce((s,r)=>s+(r.ag||0),0), propostas:fS.reduce((s,r)=>s+(r.pr||0),0),
+    leadsCrm:fS.reduce((s,r)=>s+(r.lc||0),0)};
 }
 /* daily aggregation for a source pair. `d` (data da venda) é a data REAL da
    compra (aba Compradores), não a data da conversa — ver build.py::process. */
@@ -536,8 +539,8 @@ function kpiCard(k){ return `<div class="kpi ${k.hero?'hero':''}"><div class="kl
 /* ---------------- PAGE 1: Visão Geral ---------------- */
 /* IDs dos elementos por página — a Visão Geral e o Relatório compartilham o
    MESMO corpo (renderGeralCore), só mudam os alvos no DOM. */
-const GERAL_IDS={funnel:'geralFunnel',kpis2:'geralKpis2',combo:'gCombo',source:'gSource',bucket:'gBucket',plat:'gPlat',prof:'gProf',daily:'gDaily'};
-const REL_IDS  ={funnel:'relFunnel', kpis2:'relKpis2', combo:'rCombo',source:'rSource',bucket:'rBucket',plat:'rPlat',prof:'rProf',daily:'rDaily'};
+const GERAL_IDS={crmNote:'geralCrmNote',funnel:'geralFunnel',kpis2:'geralKpis2',combo:'gCombo',source:'gSource',bucket:'gBucket',plat:'gPlat',prof:'gProf',daily:'gDaily'};
+const REL_IDS  ={crmNote:'relCrmNote',funnel:'relFunnel', kpis2:'relKpis2', combo:'rCombo',source:'rSource',bucket:'rBucket',plat:'rPlat',prof:'rProf',daily:'rDaily'};
 function renderGeral(){ renderGeralCore(GERAL_IDS); }
 function renderGeralCore(ids){
   const fL=leadsActive(), fM=metaActive(), fS=salesActive();
@@ -555,13 +558,17 @@ function renderGeralCore(ids){
     ['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]],
     ['Leads', intf(t.leads), [['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]],
     ['MQLs (Qualificados)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql'],
-    ['Agendamentos', intf(t.agendamentos), [['Tx‑Agend.',pct(s.txag)],['Custo/Agend.',brl(s.cpag)]]],
+    ['Reuniões agendadas', intf(t.agendamentos), [['Tx‑Reunião',pct(s.txag)],['Custo/Reunião',brl(s.cpag)]]],
     ['Propostas enviadas', intf(t.propostas), [['Tx‑Proposta',pct(s.txprop)],['Custo/Proposta',brl(s.cpprop)]]],
-    ['Vendas', s.vendas!=null?intf(s.vendas):NA, [['ConvMQL',s.convmql!=null?pct(s.convmql):NA],['CAC',s.cac!=null?brl(s.cac):NA]], s.vendas==null],
-    ['Receita', s.receita!=null?brl(s.receita):NA, [['ROAS',s.roasReceita!=null?numf(s.roasReceita):NA],['Ticket',s.tmReceita!=null?brl(s.tmReceita):NA]], s.receita==null, 'hl-fat'],
-    ['Faturamento', s.fat!=null?brl(s.fat):NA, [['ROAS',s.roas!=null?numf(s.roas):NA],['Ticket',s.tm!=null?brl(s.tm):NA]], s.fat==null, 'hl-fat'],
+    ['Vendas', intf(t.vendas), [['Tx‑Venda',pct(s.txvprop)],['CAC',brl(s.cac)]]],
+    ['Receita', brl(t.receita), [['ROAS',numf(s.roasReceita)],['Ticket',brl(s.tmReceita)]], false, 'hl-fat'],
+    ['Faturamento', brl(t.fat), [['ROAS',numf(s.roas)],['Ticket',brl(s.tm)]], false, 'hl-fat'],
   ];
   document.getElementById(ids.funnel).innerHTML=funnelHTML(steps);
+  const sv=totals([],[],fS.filter(r=>r.src==='sem_vinculo'));
+  document.getElementById(ids.crmNote).innerHTML=(sv.leadsCrm||sv.agendamentos||sv.propostas||sv.vendas)
+    ? `<b>Sem vínculo com campanha</b> (lead só no comercial ou venda sem lead): ${[[sv.leadsCrm,'lead','leads'],[sv.agendamentos,'reunião','reuniões'],[sv.propostas,'proposta','propostas'],[sv.vendas,'venda','vendas']].map(([n,a,b])=>intf(n)+' '+(n===1?a:b)).join(' · ')}. Entram nos totais acima (os leads não somam no card Leads, que é o formulário), mas não na página Meta Ads.`
+    : '';
   // ---- Mar05: métricas secundárias mais úteis (não repetem o funil) ----
   const dd=daily(fL,fM,fS), nDays=dd.length||1;
   const adAgg=buildAgg(fL,fM,fS,'ad');
@@ -569,7 +576,7 @@ function renderGeralCore(ids){
   Object.entries(adAgg).forEach(([ad,a])=>{
     if(a.sp>0) nAdsAtivos++;
     if(topAd==null||a.mqls>topAd.m) topAd={ad,m:a.mqls};
-    if(a.mqls>0){ const cq=(a.sp*taxf())/a.mqls; if(bestAd==null||cq<bestAd.v) bestAd={ad,v:cq}; }
+    if(a.mqls>0&&a.sp>0){ const cq=(a.sp*taxf())/a.mqls; if(bestAd==null||cq<bestAd.v) bestAd={ad,v:cq}; }
   });
   const nCampAtivas=Object.values(buildAgg(fL,fM,fS,'camp')).filter(a=>a.sp>0).length;
   const concTop=(t.mqls&&topAd)?topAd.m/t.mqls:null;
@@ -722,7 +729,7 @@ function relRenderAdTable(id,list){
     {key:'leads',label:'Leads',type:'int'},{key:'cpl',label:'CPL',type:'brl'},
     {key:'mqls',label:'MQLs',type:'int'},{key:'tx',label:'Tx‑MQL',type:'pct'},
     {key:'cpmql',label:'CPMQL',type:'brl'},
-    {key:'ag',label:'Agend.',type:'int'},{key:'cpag',label:'C/Agend.',type:'brl'},
+    {key:'ag',label:'Reuniões',type:'int'},{key:'cpag',label:'C/Reunião',type:'brl'},
     {key:'pr',label:'Propostas',type:'int'},
     {key:'convmql',label:'ConvMQL',type:'pct'},
     {key:'vendas',label:'Vendas',type:'int'},
@@ -759,7 +766,7 @@ function relRenderAdTable(id,list){
 /* Insights de Tráfego: UMA análise por dia (gerada 23h59 BRT), não por
    período selecionado — não reage ao seletor de período da topbar. 6 seções
    fixas (ver build/GUIA-RELATORIOS.md); "gargalo_dado" só aparece quando
-   alguma fonte de dado (hoje: Agendamentos) está desconectada. */
+   alguma fonte de dado está desconectada (fontes_conectadas com false). */
 const REL_SECTIONS=[
   ['resumo_periodo','Resumo do período'],
   ['leitura_funil','Leitura do funil'],
@@ -846,7 +853,7 @@ const DAILY_COLS=[
   {key:'ctr',label:'CTR',type:'pct'},{key:'cr',label:'CR',type:'pct'},{key:'convlp',label:'ConvLP',type:'pct'},
   {key:'leads',label:'Leads',type:'int',heat:'leads'},{key:'cpl',label:'CPL',type:'brl'},
   {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'mqls',label:'MQLs',type:'int',heat:'mqls'},{key:'cpmql',label:'CPMQL',type:'brl'},
-  {key:'ag',label:'Agend.',type:'int'},{key:'cpag',label:'C/Agend.',type:'brl'},
+  {key:'ag',label:'Reuniões',type:'int'},{key:'cpag',label:'C/Reunião',type:'brl'},
   {key:'pr',label:'Propostas',type:'int'},{key:'cppr',label:'C/Proposta',type:'brl'},
   {key:'chk',label:'Checkouts',type:'int',w:104},{key:'vischk',label:'VisCHK',type:'pct'},
   {key:'convmql',label:'ConvMQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int',heat:'vendas'},{key:'cac',label:'CAC',type:'brl'},
@@ -891,11 +898,11 @@ function renderMeta(){
     ['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]],
     ['Leads', intf(t.leads), [['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]],
     ['MQLs (Qualificados)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql'],
-    ['Agendamentos', intf(t.agendamentos), [['Tx‑Agend.',pct(s.txag)],['Custo/Agend.',brl(s.cpag)]]],
+    ['Reuniões agendadas', intf(t.agendamentos), [['Tx‑Reunião',pct(s.txag)],['Custo/Reunião',brl(s.cpag)]]],
     ['Propostas enviadas', intf(t.propostas), [['Tx‑Proposta',pct(s.txprop)],['Custo/Proposta',brl(s.cpprop)]]],
-    ['Vendas', s.vendas!=null?intf(s.vendas):NA, [['ConvMQL',s.convmql!=null?pct(s.convmql):NA],['CAC',s.cac!=null?brl(s.cac):NA]], s.vendas==null],
-    ['Receita', s.receita!=null?brl(s.receita):NA, [['ROAS',s.roasReceita!=null?numf(s.roasReceita):NA],['Ticket',s.tmReceita!=null?brl(s.tmReceita):NA]], s.receita==null, 'hl-fat'],
-    ['Faturamento', s.fat!=null?brl(s.fat):NA, [['ROAS',s.roas!=null?numf(s.roas):NA],['Ticket',s.tm!=null?brl(s.tm):NA]], s.fat==null, 'hl-fat'],
+    ['Vendas', intf(t.vendas), [['Tx‑Venda',pct(s.txvprop)],['CAC',brl(s.cac)]]],
+    ['Receita', brl(t.receita), [['ROAS',numf(s.roasReceita)],['Ticket',brl(s.tmReceita)]], false, 'hl-fat'],
+    ['Faturamento', brl(t.fat), [['ROAS',numf(s.roas)],['Ticket',brl(s.tm)]], false, 'hl-fat'],
   ];
   document.getElementById('metaFunnel').innerHTML=funnelHTML(steps);
 
@@ -940,7 +947,7 @@ function renderMeta(){
     {key:'leads',label:'Leads',type:'int'},{key:'cpl',label:'CPL',type:'brl'},
     {key:'tx',label:'Tx‑MQL',type:'pct'},
     {key:'mqls',label:'MQLs',type:'int'},{key:'cpmql',label:'CPMQL',type:'brl'},
-    {key:'ag',label:'Agend.',type:'int'},{key:'cpag',label:'C/Agend.',type:'brl'},
+    {key:'ag',label:'Reuniões',type:'int'},{key:'cpag',label:'C/Reunião',type:'brl'},
     {key:'pr',label:'Propostas',type:'int'},{key:'cppr',label:'C/Proposta',type:'brl'},
     {key:'convmql',label:'ConvMQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int'},{key:'cac',label:'CAC',type:'brl'},
     {key:'fat',label:'Fat.',type:'brl'},{key:'receita',label:'Receita',type:'brl'},{key:'roas',label:'ROAS',type:'num'},
@@ -1019,7 +1026,7 @@ function renderGpt(){
   const steps=[
     ['Leads ChatGPT Ads', intf(t.leads), [['% do total',pct(allLeads?t.leads/allLeads:null)],['CPL',NA]]],
     ['MQLs (Qualificados)', intf(t.mqls), [['Tx‑MQL',pct(tx)],['CPMQL',NA]], false, 'hl-mql'],
-    ['Agendamentos', intf(t.agendamentos), [['Tx‑Agend.',pct(s.txag)],['Custo/Agend.',NA]]],
+    ['Reuniões agendadas', intf(t.agendamentos), [['Tx‑Reunião',pct(s.txag)],['Custo/Reunião',NA]]],
     ['Propostas enviadas', intf(t.propostas), [['Tx‑Proposta',pct(s.txprop)],['Custo/Proposta',NA]]],
     ['Vendas', s.vendas!=null?intf(s.vendas):'0', [['ConvMQL',s.convmql!=null?pct(s.convmql):'-'],['CAC',NA]]],
     ['Faturamento', s.fat!=null?brl(s.fat):brl(0), [['Ticket',s.tm!=null?brl(s.tm):'-']], false, 'hl-fat'],
@@ -1031,7 +1038,7 @@ function renderGpt(){
   const gcols=[
     {key:'date',label:'Data',type:'date'},{key:'wd',label:'Dia',type:'dim',w:70},
     {key:'leads',label:'Leads',type:'int',heat:'leads'},{key:'mqls',label:'MQLs',type:'int',heat:'mqls'},
-    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'ag',label:'Agend.',type:'int'},{key:'pr',label:'Propostas',type:'int'},
+    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'ag',label:'Reuniões',type:'int'},{key:'pr',label:'Propostas',type:'int'},
     {key:'vendas',label:'Vendas',type:'int',heat:'vendas'},
     {key:'convmql',label:'ConvMQL',type:'pct'},{key:'fat',label:'Fat.',type:'brl'},
   ];
@@ -1051,7 +1058,7 @@ function renderGpt(){
 
   const hcols=[
     {key:'dim',label:'',type:'dim',big:true},{key:'leads',label:'Leads',type:'int'},{key:'mqls',label:'MQLs',type:'int'},
-    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'ag',label:'Agend.',type:'int'},{key:'pr',label:'Propostas',type:'int'},
+    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'ag',label:'Reuniões',type:'int'},{key:'pr',label:'Propostas',type:'int'},
     {key:'vendas',label:'Vendas',type:'int'},{key:'convmql',label:'ConvMQL',type:'pct'},
     {key:'fat',label:'Fat.',type:'brl'},
   ];

@@ -53,7 +53,11 @@ SHEET_VENDAS = "Vendas"
 # = Leads.id) e histórico de etapas. Só conta o funil do produto (metodo_ral).
 SHEET_COM_LEADS = "Comercial_Leads"
 SHEET_COM_ETAPAS = "Comercial_Etapas"
+SHEET_COM_PRESENCA = "Comercial_Presenca"
 COM_FUNIL = "metodo_ral"
+# Vendas que contam: produto da Formação, pagas a partir do início do funil.
+VENDA_PRODUTO = "formacao"
+FUNNEL_START = "2026-08-28"
 # Planilha do Meta Ads (separada da planilha do Funil).
 SPREADSHEET_ID_META = "1xb5itNu9_No6keCKHyzG7qIPobT46BqfmJ_rP0v4h8c"
 SHEET_META = "Página 1"
@@ -296,17 +300,18 @@ def cell(row, i):
 # Vendas -> lista de compras (uma entrada por linha, nunca agregada)
 # --------------------------------------------------------------------------- #
 def build_purchases(sales_rows):
-    """Lê a aba Vendas e devolve uma lista de compras CONFIRMADAS (pago == "sim"),
-    uma entrada por linha: [{"lead_id","phone","d","fat","receita","nm"}, ...].
-    Mantemos cada compra separada — com sua própria data ("pago_em") — pra
-    atribuir a venda ao dia em que ela REALMENTE aconteceu, em vez de empilhar
-    o histórico de um lead/telefone num único dia."""
+    """Vendas da aba Vendas (Eduzz) que contam na dash: pagamento confirmado
+    (`pago` == "sim"), produto da Formação (`VENDA_PRODUTO`) e pagas a partir
+    do início do funil (`FUNNEL_START` — tira a venda de 26/08, anterior ao
+    funil). O produto de teste (valor 0) cai no filtro de produto. Uma entrada
+    por linha: [{"lead_id","phone","d","fat","receita","nm"}, ...]."""
     header = sales_rows[0] if sales_rows else []
     idx = header_index(
         header,
         {"lead_id": ["lead_id"], "phone": ["whatsapp", "telefone"], "date": ["pago_em", "data"],
-         "valor": ["valor", "faturamento"], "name": ["comprador", "nome"], "pago": ["pago", "status"]},
-        {"lead_id": 12, "phone": 6, "date": 1, "valor": 7, "name": 4, "pago": 3},
+         "valor": ["valor", "faturamento"], "name": ["comprador", "nome"], "pago": ["pago", "status"],
+         "produto": ["produto"]},
+        {"lead_id": 12, "phone": 6, "date": 1, "valor": 7, "name": 4, "pago": 3, "produto": 9},
     )
     out = []
     for row in sales_rows[1:]:
@@ -314,11 +319,14 @@ def build_purchases(sales_rows):
             continue
         if not is_yes(cell(row, idx["pago"])):
             continue
+        d = parse_date_brt(cell(row, idx["date"]))
+        if VENDA_PRODUTO not in norm(cell(row, idx["produto"])) or not d or d < FUNNEL_START:
+            continue
         valor = to_float(cell(row, idx["valor"]))
         out.append({
             "lead_id": cell(row, idx["lead_id"]),
             "phone": norm_phone(cell(row, idx["phone"])),
-            "d": parse_date_brt(cell(row, idx["date"])),
+            "d": d,
             "fat": valor,
             "receita": valor,
             "nm": cell(row, idx["name"]),
@@ -327,101 +335,122 @@ def build_purchases(sales_rows):
 
 
 def log_unmatched_sales(matched: int, total: int, unmatched: list[dict]):
-    """Diagnóstico (stderr, não afeta a saída): compras da aba Vendas cujo
-    lead_id não bate com nenhum lead E cujo telefone (canonicalizado) também
-    não bate com nenhum lead da aba Leads. Essas vendas NÃO entram na dash
-    (nem nos totais, nem na Visão Geral) — provavelmente compra de outro
-    produto/origem que também cai na aba Vendas. Este log serve pra conferir
-    quanto fica de fora e detectar lead_id/telefone genuinamente divergente
-    (que deveria ter casado e não casou)."""
-    print(f"  vendas atribuídas a anúncio: {matched}/{total} (cruzamento lead_id + telefone canônico Vendas × Leads)",
-          file=sys.stderr)
-    if not unmatched:
-        return
-    print(f"  {len(unmatched)} compra(s) SEM lead correspondente — EXCLUÍDAS da dash (fora deste funil):",
-          file=sys.stderr)
+    """Diagnóstico (stderr): vendas sem lead do funil correspondente. Elas
+    contam no total (Visão Geral), sem campanha/anúncio."""
+    print(f"  vendas: {total} (Formação, pagas) | atribuídas a campanha: {matched}", file=sys.stderr)
     for p in unmatched:
         ph = p["phone"]
-        print(f"    - {p['d'] or '?'}  {first_last_initial(p['nm'])}  tel …{ph[-4:] if len(ph) >= 4 else ph}",
+        print(f"    - sem vínculo: {p['d'] or '?'}  {first_last_initial(p['nm'])}  tel …{ph[-4:] if len(ph) >= 4 else ph}",
               file=sys.stderr)
 
 
 # --------------------------------------------------------------------------- #
 # Processamento -> registros brutos
 # --------------------------------------------------------------------------- #
-AGEND_ETAPAS = ("reuniao_agendada", "proposta_enviada", "fechado")
+REUNIAO_ETAPAS = ("reuniao_agendada", "proposta_enviada", "fechado")
 PROPOSTA_ETAPAS = ("proposta_enviada", "fechado")
+# "desconhecida" = histórico importado em massa (data da importação, não da
+# mudança de etapa) — não conta, igual ao painel do Moisés.
+EVENTO_VALIDO = ("real", "inferida")
+SEM_VINCULO = {"src": "sem_vinculo", "camp": "(sem campanha)", "adset": "(sem conjunto)", "ad": "(sem anúncio)"}
 
 
-def build_commercial(com_leads_rows, com_etapas_rows, id_attrib, phone_attrib):
-    """Agendamentos e propostas do CRM comercial, um registro por lead do funil
-    por etapa alcançada: [{d, src, camp, adset, ad, ag|pr: 1}, ...].
+def active_keys(presenca_rows):
+    """Chaves "<aba>:<registro_id>" com ativo == 1 na Comercial_Presenca (a
+    planilha nunca apaga linha). None = sem a aba -> não filtra."""
+    if not presenca_rows:
+        return None
+    idx = header_index(presenca_rows[0], {"chave": ["chave"], "ativo": ["ativo"]}, {"chave": 0, "ativo": 3})
+    return {cell(r, idx["chave"]) for r in presenca_rows[1:] if cell(r, idx["ativo"]) == "1"}
 
-    Lead do CRM -> lead do funil por `marketing_lead_id` (= Leads.id) ou, na
-    ausência, pelo telefone canônico; lead do CRM que não casa fica de fora
-    (mesma regra das vendas). Etapas são cumulativas: quem chegou em proposta
-    também conta como agendado. Data = 1ª entrada na etapa (Comercial_Etapas,
-    só funil COM_FUNIL); sem histórico, usa a etapa atual da Comercial_Leads."""
-    if not com_leads_rows:
+
+def build_commercial(com_leads_rows, com_etapas_rows, presenca_rows, id_attrib, phone_attrib):
+    """Reuniões e propostas do CRM comercial em MODO COORTE: um registro por
+    lead por etapa alcançada, datado no dia em que o lead ENTROU (não no dia
+    da etapa): [{d, src, camp, adset, ad, ag|pr|lc: 1}, ...].
+
+    - Só funil COM_FUNIL, só registros ativos (Comercial_Presenca) e só
+      eventos `inferida` real/inferida (EVENTO_VALIDO).
+    - Regra de 16/10: proposta ou fechado => teve reunião; fechado => proposta.
+    - Lead do CRM -> lead do funil por `marketing_lead_id` (= Leads.id), na
+      falta pelo telefone canônico. Ligado: data e campanha do lead da aba
+      Leads. Sem ligação: entra no total (SEM_VINCULO), datado pela 1ª
+      entrada no funil, e vira também um registro `lc` (lead só do CRM).
+    - Lead com data de entrada anterior a FUNNEL_START fica de fora."""
+    if not com_leads_rows or not com_etapas_rows:
         return []
+    ativos = active_keys(presenca_rows)
+
+    def ativo(aba, rid):
+        return ativos is None or f"{aba}:{rid}" in ativos
+
     cidx = header_index(
         com_leads_rows[0],
-        {"id": ["lead_id"], "mk": ["marketing_lead_id"], "phone": ["whatsapp"], "funil": ["funil_codigo"],
-         "etapa": ["etapa_atual_codigo"], "d_etapa": ["data_etapa_atual"]},
-        {"id": 0, "mk": 1, "phone": 4, "funil": 7, "etapa": 10, "d_etapa": 12},
+        {"id": ["lead_id"], "mk": ["marketing_lead_id"], "phone": ["whatsapp"]},
+        {"id": 0, "mk": 1, "phone": 4},
     )
-    crm = {}
-    for row in com_leads_rows[1:]:
-        lid, mk = cell(row, cidx["id"]), cell(row, cidx["mk"])
-        attrib = id_attrib.get(mk) if mk else None
-        if attrib is None:
-            attrib = phone_attrib.get(canon_phone(cell(row, cidx["phone"])))
-        if lid and attrib is not None:
-            crm[lid] = {"attrib": attrib, "funil": cell(row, cidx["funil"]), "etapa": cell(row, cidx["etapa"]),
-                        "d_etapa": parse_date_brt(cell(row, cidx["d_etapa"]))}
+    crm = {cell(r, cidx["id"]): r for r in com_leads_rows[1:]
+           if cell(r, cidx["id"]) and ativo(SHEET_COM_LEADS, cell(r, cidx["id"]))}
 
-    # etapas alcançadas por lead do FUNIL (vários leads do CRM podem apontar
-    # pro mesmo lead do funil): {key: {etapa: 1a data}}
-    reached: dict[str, dict[str, str | None]] = {}
-    attrib_of: dict[str, dict] = {}
+    eidx = header_index(
+        com_etapas_rows[0],
+        {"ev": ["evento_id"], "id": ["lead_id"], "funil": ["funil_codigo"], "etapa": ["etapa_codigo"],
+         "d": ["entrou_em"], "inf": ["inferida"]},
+        {"ev": 0, "id": 1, "funil": 3, "etapa": 6, "d": 8, "inf": 10},
+    )
+    first: dict[str, str] = {}
+    stages: dict[str, set] = {}
+    for row in com_etapas_rows[1:]:
+        lid = cell(row, eidx["id"])
+        if not lid or cell(row, eidx["funil"]) != COM_FUNIL or not ativo(SHEET_COM_ETAPAS, cell(row, eidx["ev"])):
+            continue
+        d = parse_date_brt(cell(row, eidx["d"]))
+        if d and (lid not in first or d < first[lid]):
+            first[lid] = d
+        st = stages.setdefault(lid, set())
+        if norm(cell(row, eidx["inf"])) in EVENTO_VALIDO:
+            st.add(cell(row, eidx["etapa"]))
 
-    def mark(c, etapa, dt):
-        k = c["attrib"]["key"]
-        attrib_of[k] = c["attrib"]
-        st = reached.setdefault(k, {})
-        if etapa not in st or (dt and (st[etapa] is None or dt < st[etapa])):
-            st[etapa] = dt
-
-    if com_etapas_rows:
-        eidx = header_index(
-            com_etapas_rows[0],
-            {"id": ["lead_id"], "funil": ["funil_codigo"], "etapa": ["etapa_codigo"], "d": ["entrou_em"]},
-            {"id": 1, "funil": 3, "etapa": 6, "d": 8},
-        )
-        for row in com_etapas_rows[1:]:
-            c = crm.get(cell(row, eidx["id"]))
-            if c and cell(row, eidx["funil"]) == COM_FUNIL:
-                mark(c, cell(row, eidx["etapa"]), parse_date_brt(cell(row, eidx["d"])))
-    for c in crm.values():
-        if c["funil"] == COM_FUNIL and c["etapa"] and c["etapa"] not in reached.get(c["attrib"]["key"], {}):
-            mark(c, c["etapa"], c["d_etapa"])
+    # vários leads do CRM podem apontar pro mesmo lead do funil -> junta por chave
+    per_key: dict[str, dict] = {}
+    for lid, st in stages.items():
+        row = crm.get(lid)
+        attrib = None
+        if row is not None:
+            mk = cell(row, cidx["mk"])
+            attrib = id_attrib.get(mk) if mk else None
+            if attrib is None:
+                attrib = phone_attrib.get(canon_phone(cell(row, cidx["phone"])))
+        if attrib is not None:
+            k, base, d, linked = attrib["key"], {f: attrib[f] for f in ("src", "camp", "adset", "ad")}, attrib["d"], True
+        else:
+            k, base, d, linked = f"crm:{lid}", dict(SEM_VINCULO), first.get(lid), False
+        cur = per_key.setdefault(k, {"base": base, "d": d, "st": set(), "linked": linked})
+        cur["st"] |= st
+        if d and (cur["d"] is None or d < cur["d"]):
+            cur["d"] = d
 
     out = []
-    for k, st in reached.items():
-        a = attrib_of[k]
-        base = {"src": a["src"], "camp": a["camp"], "adset": a["adset"], "ad": a["ad"]}
-        for field, etapas in (("ag", AGEND_ETAPAS), ("pr", PROPOSTA_ETAPAS)):
-            hit = [e for e in etapas if e in st]
-            if hit:
-                d = next((st[e] for e in hit if st[e]), None)
-                out.append({**base, "d": d, field: 1})
-    print(f"  comercial: {len(crm)} leads do CRM casados com o funil | "
-          f"agendamentos: {sum(r.get('ag', 0) for r in out)} | propostas: {sum(r.get('pr', 0) for r in out)}",
+    antes = 0
+    for cur in per_key.values():
+        if not cur["d"] or cur["d"] < FUNNEL_START:   # lead do CRM anterior ao funil
+            antes += 1
+            continue
+        rec = {**cur["base"], "d": cur["d"]}
+        if not cur["linked"]:
+            out.append({**rec, "lc": 1})
+        if cur["st"] & set(REUNIAO_ETAPAS):
+            out.append({**rec, "ag": 1})
+        if cur["st"] & set(PROPOSTA_ETAPAS):
+            out.append({**rec, "pr": 1})
+    print(f"  comercial ({COM_FUNIL}): {len(per_key)} leads ({sum(1 for c in per_key.values() if c['linked'])} ligados à aba Leads) | "
+          f"anteriores a {FUNNEL_START} (fora): {antes} | "
+          f"reuniões: {sum(r.get('ag', 0) for r in out)} | propostas: {sum(r.get('pr', 0) for r in out)}",
           file=sys.stderr)
     return out
 
 
-def process(leads_rows, meta_rows, sales_rows, com_leads_rows=None, com_etapas_rows=None):
+def process(leads_rows, meta_rows, sales_rows, com_leads_rows=None, com_etapas_rows=None, presenca_rows=None):
     lheader = leads_rows[0] if leads_rows else []
     lidx = header_index(
         lheader,
@@ -489,13 +518,8 @@ def process(leads_rows, meta_rows, sales_rows, com_leads_rows=None, com_etapas_r
             "ph": mask_phone(cell(row, lidx["phone"])),
         })
 
-    # Vendas: um registro POR COMPRA (nunca agregada), na data real da compra
-    # ("pago_em"). Só entram vendas que casam com um lead deste funil — por
-    # lead_id (FK direta) ou, na ausência, por telefone canônico. Uma venda
-    # sem lead_id E sem telefone batendo não tem como ter vindo de um lead
-    # capturado por este funil (decisão do cliente: a aba Vendas pode conter
-    # compras de outras origens/produtos) — fica de fora da dash inteira, não
-    # só da quebra por campanha do Meta. A aba Vendas em si nunca é alterada.
+    # Vendas: um registro POR COMPRA da aba Vendas (filtros em build_purchases).
+    # Atribuição por lead_id (= Leads.id), na falta pelo telefone canônico.
     purchases = build_purchases(sales_rows)
     sales = []
     matched = 0
@@ -504,23 +528,27 @@ def process(leads_rows, meta_rows, sales_rows, com_leads_rows=None, com_etapas_r
         attrib = id_attrib.get(p["lead_id"]) if p["lead_id"] else None
         if attrib is None:
             attrib = phone_attrib.get(canon_phone(p["phone"]))
+        # modo coorte: venda ligada conta no dia em que o lead entrou; sem
+        # ligação conta no total, sem campanha, na data do pagamento.
         if attrib is None:
             unmatched.append(p)
-            continue
-        matched += 1
+            base, d = SEM_VINCULO, p["d"]
+        else:
+            matched += 1
+            base, d = attrib, attrib["d"] or p["d"]
         sales.append({
-            "d": p["d"] or attrib["d"],
-            "src": attrib["src"],
-            "camp": attrib["camp"],
-            "adset": attrib["adset"],
-            "ad": attrib["ad"],
+            "d": d,
+            "src": base["src"],
+            "camp": base["camp"],
+            "adset": base["adset"],
+            "ad": base["ad"],
             "vendas": 1,
             "fat": round(p["fat"], 2),
             "receita": round(p["receita"], 2),
         })
 
     log_unmatched_sales(matched, len(purchases), unmatched)
-    com = build_commercial(com_leads_rows, com_etapas_rows, id_attrib, phone_attrib)
+    com = build_commercial(com_leads_rows, com_etapas_rows, presenca_rows, id_attrib, phone_attrib)
 
     mheader = meta_rows[0] if meta_rows else []
     midx = header_index(
@@ -651,6 +679,7 @@ def main():
     ap.add_argument("--sales-file", help="CSV local da aba Vendas (Compradores)")
     ap.add_argument("--com-leads-file", help="CSV local da aba Comercial_Leads")
     ap.add_argument("--com-etapas-file", help="CSV local da aba Comercial_Etapas")
+    ap.add_argument("--presenca-file", help="CSV local da aba Comercial_Presenca")
     ap.add_argument("--template", default="build/template.html")
     ap.add_argument("--out", default="dist/index.html")
     args = ap.parse_args()
@@ -660,8 +689,9 @@ def main():
     meta_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META), args.meta_file)
     com_leads_rows = load_rows(sheet_url(SPREADSHEET_ID_FUNIL, SHEET_COM_LEADS), args.com_leads_file)
     com_etapas_rows = load_rows(sheet_url(SPREADSHEET_ID_FUNIL, SHEET_COM_ETAPAS), args.com_etapas_file)
+    presenca_rows = load_rows(sheet_url(SPREADSHEET_ID_FUNIL, SHEET_COM_PRESENCA), args.presenca_file)
 
-    data = process(leads_rows, meta_rows, sales_rows, com_leads_rows, com_etapas_rows)
+    data = process(leads_rows, meta_rows, sales_rows, com_leads_rows, com_etapas_rows, presenca_rows)
 
     # Insights de Tráfego (texto pré-escrito) — lidos do arquivo versionado ao
     # lado do template. Sem chamada de API no build.

@@ -95,7 +95,8 @@ def main():
     meta_rows = bp.load_rows(bp.sheet_url(bp.SPREADSHEET_ID_META, bp.SHEET_META), args.meta_file)
     com_leads_rows = bp.load_rows(bp.sheet_url(bp.SPREADSHEET_ID_FUNIL, bp.SHEET_COM_LEADS), None)
     com_etapas_rows = bp.load_rows(bp.sheet_url(bp.SPREADSHEET_ID_FUNIL, bp.SHEET_COM_ETAPAS), None)
-    data = bp.process(leads_rows, meta_rows, sales_rows, com_leads_rows, com_etapas_rows)
+    presenca_rows = bp.load_rows(bp.sheet_url(bp.SPREADSHEET_ID_FUNIL, bp.SHEET_COM_PRESENCA), None)
+    data = bp.process(leads_rows, meta_rows, sales_rows, com_leads_rows, com_etapas_rows, presenca_rows)
     # agendamentos/propostas (com[]) entram no mesmo fluxo das vendas: agg() soma ag/pr/vendas por campo
     leads, meta, sales = data["leads"], data["meta"], data["sales"] + data["com"]
 
@@ -131,7 +132,8 @@ def main():
             "n_dias_corte": bp.N_DIAS_CORTE,
         },
         # Funil: Impressões -> Cliques -> Page View -> Leads -> MQLs -> Agendamentos -> Vendas.
-        # Agendamentos/propostas vêm do CRM comercial (abas Comercial_Leads/Comercial_Etapas).
+        # Reuniões agendadas ("agendamentos") e propostas vêm do CRM comercial, em modo
+        # coorte (contam no dia em que o lead entrou) — ver build.py::build_commercial.
         "fontes_conectadas": {
             "impressoes_cliques": True, "page_view": True, "leads": True, "mqls": True,
             "agendamentos": True, "propostas": True, "vendas": True, "faturamento": True,

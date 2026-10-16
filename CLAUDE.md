@@ -105,32 +105,21 @@ Lead só vira `meta` se tiver campanha **e** `utm_source` da Meta (`meta-ads`,
 `facebook`, `ig`… ou vazio); campanha preenchida com outra origem (ex.: lead de
 teste `utm_source="adryan gpt"`, campanha `testetres`) vira `src="outros"`.
 
-### Vendas & Faturamento (cruzamento com Vendas)
-`build.py` → `build_purchases()` lê a aba **Vendas**, filtra só compras
-confirmadas (`pago == "sim"`) e devolve uma lista **não agregada**, uma entrada
-por linha: `[{lead_id, phone, d, fat, receita, nm}, ...]` (`d` = `pago_em`, a
-data real daquela compra). Em `process()`, as linhas da **Leads** são ordenadas
-pela **data já parseada** (`parse_date`, não a string bruta) e indexadas de duas
-formas: por `id` (→ `id_attrib`) e pelo **1º lead** (mais antigo) de cada
-telefone canônico (→ `phone_attrib`).
+### Vendas & Faturamento (aba Vendas)
+`build.py` → `build_purchases()` lê a aba **Vendas** (Eduzz) e só mantém
+compras com `pago == "sim"`, produto da **Formação** (`VENDA_PRODUTO`) e
+`pago_em` a partir de `FUNNEL_START = "2026-08-28"` (tira a venda de 26/08,
+anterior ao funil; o produto de teste cai no filtro de produto). Quantidade e
+valor das vendas vêm **daqui**, nunca da etapa "fechado" do CRM.
 
-Cruzamento de cada venda, nessa ordem: **1) `lead_id`** (FK direta
-`Vendas.lead_id` → `Leads.id`, cruzamento exato) · **2) fallback por telefone**
-canônico (`canon_phone()` — DDD + últimos 8 dígitos, robusto a DDI "55" e ao 9º
-dígito do celular) quando `lead_id` vem vazio. Cada compra vira um registro
-próprio em `DATA.sales[]` (`{d, camp, adset, ad, vendas:1, fat, receita}`) com a
-**data real da compra** (nunca a data do lead). No navegador, `salesActive()`
-(`app.js`) filtra `sales[]` pela mesma data ativa que `leadsActive()`/
-`metaActive()`, e os três arrays (`fL`/`fM`/`fS`) se propagam juntos em
-`buildAgg`/`daily`/`totals`.
+Atribuição: **1) `lead_id`** (`Vendas.lead_id` → `Leads.id`) · **2)** fallback
+por telefone canônico (`canon_phone()`). Venda **sem ligação conta no total**
+(Visão Geral), com `src="sem_vinculo"` e sem campanha — fica fora da página
+Meta. Regra combinada com o cliente em 16/10/2026 (antes, venda sem ligação
+era excluída). `log_unmatched_sales()` lista no build as vendas sem vínculo.
 
-**Só entra na dash a venda que casa com um lead deste funil** (por `lead_id`
-ou, na ausência, por telefone canônico) — decisão do cliente: a aba Vendas
-pode ter compras de outra origem/produto que não vieram deste funil, e essas
-**não devem contar em nenhum total** (nem Visão Geral, nem mídia paga). Uma
-venda sem `lead_id` e sem telefone batendo é **excluída da dash inteira**
-(a aba Vendas em si nunca é alterada — só a leitura ignora essa linha).
-`log_unmatched_sales()` loga no build quantas vendas ficaram de fora.
+**Modo coorte:** venda ligada é datada no dia em que o **lead entrou**
+(`Leads.criado_em`, BRT), não no `pago_em`; venda sem ligação usa o `pago_em`.
 
 ### Imposto da mídia paga
 `TAX_FACTOR = 1.1385` em `build.py` — imposto de **13,85%** sobre o gasto de
@@ -220,8 +209,8 @@ editou no painel (fica em `localStorage`).
 Funil completo: `Impressões → Cliques → Page View → Leads → MQLs → Agendamentos
 → Vendas`. Sem etapa de comparecimento (agendamento via WhatsApp, fora da mídia
 paga) — a responsabilidade do tráfego termina no MQL. Todas as etapas estão
-conectadas e cruzadas — Agendamentos/Propostas via CRM comercial (ver
-"Agendamentos & Propostas" abaixo).
+conectadas e cruzadas — Reuniões/Propostas via CRM comercial (ver
+"Reuniões & Propostas" abaixo).
 
 ### Link do criativo (aba de mídia paga)
 `build.py` lê uma coluna opcional de permalink do criativo na aba de mídia →
@@ -270,33 +259,53 @@ ordenação tri‑state; colunas redimensionáveis (persist localStorage); linha
 filtro cruzado bidirecional; tabela diária com último dia no topo; heatmap de cor
 fixa por métrica.
 
-## Agendamentos & Propostas (CRM comercial)
-Mesma planilha do Funil, abas **`Comercial_Leads`** (1 linha por lead do CRM:
-`lead_id`, `marketing_lead_id` = `Leads.id`, `whatsapp`, `funil_codigo`,
-`etapa_atual_codigo`, `data_etapa_atual`, `valor_proposta`…) e
-**`Comercial_Etapas`** (histórico: `lead_id`, `funil_codigo`, `etapa_codigo`,
-`entrou_em`). Etapas do funil `metodo_ral` (`COM_FUNIL`): `formulario` →
-`reuniao_agendada` → `proposta_enviada` → `fechado` / `perdido` (o funil
-`consultoria` é outro produto e fica de fora).
+## Reuniões & Propostas (CRM comercial) — regras de 16/10/2026
+Mesma planilha do Funil (planilha mantida pelo Moisés — **só leitura**; não
+mexer no Apps Script `Código.gs`). Abas:
+- **`Comercial_Leads`**: 1 linha por lead do CRM (FinHub): `lead_id`,
+  `marketing_lead_id` (= `Leads.id`), `whatsapp`, `funil_codigo`,
+  `etapa_atual_codigo`…
+- **`Comercial_Etapas`**: 1 evento por mudança de etapa: `lead_id`,
+  `funil_codigo`, `etapa_codigo`, `entrou_em` (UTC), `inferida`.
+- **`Comercial_Presenca`**: `chave` = `"<aba>:<registro_id>"`, `ativo`. A
+  planilha nunca apaga linha — só conta `ativo == 1` (`active_keys()`).
+- **`Investimento`** (fórmula a partir da Extração — não usar/mexer) e
+  **`Dashboard Comercial`** (painel do Moisés, só referência).
 
-`build.py::build_commercial()` liga lead do CRM → lead do funil por
-`marketing_lead_id` (fallback telefone canônico) — lead do CRM que não casa
-fica fora — e emite `DATA.com[]`: 1 registro por lead do funil por etapa
-alcançada (`{d, src, camp, adset, ad, ag:1}` / `{…, pr:1}`), **cumulativo**
-(quem chegou em proposta/fechado também conta como agendado), com `d` = 1ª
-entrada na etapa (fallback: etapa atual da `Comercial_Leads`). No navegador
-`SALES = sales.concat(com)`, então agendamentos/propostas seguem os mesmos
-filtros de data/origem/campanha das vendas; `salesOf()` dá `txag` (÷MQLs),
-`cpag`, `txprop` (÷agendamentos), `cpprop`. Aparecem nos funis, tabelas diárias,
-hierarquias, Top/Piores e na página ChatGPT. `coletar_dados_relatorio.py` passa
-`sales + com` para `relatorio_lib.agg()` (campos `agendamentos`, `propostas`,
-`txag`, `cpag`, `cpproposta`, `txvendas`).
+Regras (`build.py::build_commercial()`):
+- Só funil `metodo_ral` (`COM_FUNIL`); `consultoria` é outro serviço. Linhas
+  sem funil/etapa = conversas sem etiqueta, ignoradas.
+- Etapas: `formulario` → `reuniao_agendada` → `proposta_enviada` → `fechado` /
+  `perdido`. "Agendar reunião" é etiqueta (lead fica em `formulario`) e **não**
+  conta como reunião.
+- `inferida`: `real` (mudança registrada na hora), `inferida` (o sistema cria a
+  etapa pulada, no mesmo minuto da seguinte), `desconhecida` (histórico
+  importado em massa; data = importação). **Só conta `real` + `inferida`**
+  (`EVENTO_VALIDO`), igual ao painel do Moisés.
+- **Regra de 16/10:** quem chegou em proposta ou fechado conta como reunião;
+  fechado conta como proposta (`REUNIAO_ETAPAS`/`PROPOSTA_ETAPAS`).
+- **Modo coorte:** cada lead gera 1 registro por etapa alcançada, datado no
+  dia em que **entrou**: lead ligado → `Leads.criado_em` (BRT) e campanha/
+  anúncio da aba Leads; sem ligação → 1ª entrada no funil (BRT), `src=
+  "sem_vinculo"`, mais um registro `lc:1` (lead só no comercial). Leads com
+  entrada antes de `FUNNEL_START` ficam fora.
+- Ligação CRM → Leads: `marketing_lead_id`, fallback telefone canônico.
+
+Saída `DATA.com[]` (`{d, src, camp, adset, ad, ag|pr|lc: 1}`); no navegador
+`SALES = sales.concat(com)`. Campo `agendamentos` = **Reuniões agendadas** na UI.
+`salesOf()`: `txag` (reuniões ÷ MQLs), `cpag`, `txprop` (propostas ÷ reuniões),
+`cpprop`, `txvprop` (vendas ÷ propostas). Visão Geral/Relatório usam o total
+(inclui sem vínculo, com aviso `#geralCrmNote`/`#relCrmNote`; o card Leads
+continua sendo só o formulário); Meta/Top-Piores só `src=="meta"`; ChatGPT só
+contagens. Conferência (01/09–16/10/2026): 30 reuniões, 20 propostas, 3 vendas
+(R$ 7.050,75), 54 leads só no comercial. `coletar_dados_relatorio.py` usa o
+mesmo `process()` (com presença) e passa `sales + com` ao `relatorio_lib.agg()`.
 
 As abas comerciais têm muitas colunas vazias: sem `&headers=1` na URL do gviz
 (`EXPORT_URL`), o Google funde o cabeçalho com a 1ª linha e a leitura quebra.
 
 ## Lacunas de dados
-- Nenhuma etapa do funil sem fonte hoje. Page Views, Agendamentos/Propostas e
+- Nenhuma etapa do funil sem fonte hoje. Page Views, Reuniões/Propostas e
   Vendas/Faturamento estão conectados.
 
 ## Publicação — problemas conhecidos
