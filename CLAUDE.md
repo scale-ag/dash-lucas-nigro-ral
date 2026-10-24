@@ -248,10 +248,12 @@ entre Meta Ads e Relatório (ver "ChatGPT Ads (utm_source)" acima):
 3. **Relatório** — espelha a Visão Geral + painel de Metas editável + Top/Piores
    Anúncios (17 colunas + Status) + Insights de Tráfego. Ver `build/GUIA-RELATORIOS.md`.
 
-**Ordem das colunas nas tabelas:** `Data · Dia · Gasto · CPM · CTR · ConvForm · Leads ·
-CPL · Tx‑MQL · MQLs · CPMQL · ConvMQL · Vendas · CAC · Fat. · Receita · ROAS`. Nas
-tabelas diárias entram também **Checkouts** e **VisCHK** (da coluna "Adds to Cart"
-do Meta Ads, proxy de Checkout). Sem essas colunas, ficam "-".
+**Ordem das colunas nas tabelas:** `Data · Dia · Gasto · CPM · CTR · CR · ConvLP · Leads ·
+CPL · Tx‑MQL · MQLs · CPMQL · Reuniões · C/Reunião · Propostas · C/Proposta · ConvMQL ·
+Vendas · CAC · Fat. · ROAS`. Removidas em 24/10/2026 a pedido do cliente (sempre vazias
+ou duplicadas): Checkouts, VisCHK (sem "Adds to Cart" no export), Frequência (funil),
+Receita (= Faturamento), E‑mail (tabela de leads qualificados) e Link (Top/Piores — sem
+coluna de permalink no export).
 
 **Regras obrigatórias das tabelas** (ver `GUIA-REPLICACAO.md`): cabeçalho sticky;
 ordenação tri‑state; colunas redimensionáveis (persist localStorage); linha

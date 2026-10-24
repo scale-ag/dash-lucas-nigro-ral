@@ -549,7 +549,6 @@ function renderGeralCore(ids){
   const nAds=leadsAds.length, mqlsAds=leadsAds.reduce((s,r)=>s+r.q,0);
   const nOrg=fL.filter(l=>l.src==='org').length;
   const semUtm=fL.filter(l=>!l.utm).length, comUtm=t.leads-semUtm;
-  const NA='<span class="na-tag">sem dado</span>';
   const s=salesOf(t);
   const steps=[
     ['Gasto Total', brl(g), [], false, 'hl-gasto'],
@@ -561,7 +560,6 @@ function renderGeralCore(ids){
     ['Reuniões agendadas', intf(t.agendamentos), [['Tx‑Reunião',pct(s.txag)],['Custo/Reunião',brl(s.cpag)]]],
     ['Propostas enviadas', intf(t.propostas), [['Tx‑Proposta',pct(s.txprop)],['Custo/Proposta',brl(s.cpprop)]]],
     ['Vendas', intf(t.vendas), [['Tx‑Venda',pct(s.txvprop)],['CAC',brl(s.cac)]]],
-    ['Receita', brl(t.receita), [['ROAS',numf(s.roasReceita)],['Ticket',brl(s.tmReceita)]], false, 'hl-fat'],
     ['Faturamento', brl(t.fat), [['ROAS',numf(s.roas)],['Ticket',brl(s.tm)]], false, 'hl-fat'],
   ];
   document.getElementById(ids.funnel).innerHTML=funnelHTML(steps);
@@ -736,7 +734,6 @@ function relRenderAdTable(id,list){
     {key:'cac',label:'CAC',type:'brl'},
     {key:'fat',label:'Faturamento',type:'brl'},
     {key:'roas',label:'ROAS',type:'num'},
-    {key:'link',label:'Link',type:'html',w:90,stk:'r'},
   ];
   const rows=list.map(item=>{
     const cells=adRowCells(item.ad,item.a,item.struct);
@@ -855,14 +852,12 @@ const DAILY_COLS=[
   {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'mqls',label:'MQLs',type:'int',heat:'mqls'},{key:'cpmql',label:'CPMQL',type:'brl'},
   {key:'ag',label:'Reuniões',type:'int'},{key:'cpag',label:'C/Reunião',type:'brl'},
   {key:'pr',label:'Propostas',type:'int'},{key:'cppr',label:'C/Proposta',type:'brl'},
-  {key:'chk',label:'Checkouts',type:'int',w:104},{key:'vischk',label:'VisCHK',type:'pct'},
   {key:'convmql',label:'ConvMQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int',heat:'vendas'},{key:'cac',label:'CAC',type:'brl'},
-  {key:'fat',label:'Fat.',type:'brl'},{key:'receita',label:'Receita',type:'brl'},{key:'roas',label:'ROAS',type:'num',heat:'roas'},
+  {key:'fat',label:'Fat.',type:'brl'},{key:'roas',label:'ROAS',type:'num',heat:'roas'},
 ];
 function dailyCells(x,d,isTotal){
   const s=salesOf(x);
   return {date:isTotal?null:x.d, wd:isTotal?'':weekday(x.d), gasto:d.gasto, cpm:d.cpm, ctr:d.ctr, cr:d.cr, convlp:d.convlp,
-    chk:d.chk, vischk:d.vischk,
     leads:x.leads, cpl:d.cpl, tx:d.tx, mqls:x.mqls, cpmql:d.cpmql,
     ag:x.agendamentos, cpag:s.cpag, pr:x.propostas, cppr:s.cpprop,
     convmql:s.convmql, vendas:s.vendas, cac:s.cac, fat:s.fat, receita:s.receita, roas:s.roas};
@@ -889,11 +884,10 @@ function selDim(dim,key,ctrl){
 function renderMeta(){
   const F=metaScope(null), fL=F.fL, fM=F.fM, fS=F.fS;   // KPIs, funil, graficos e tabela diaria
   const t=totals(fL,fM,fS), dv=derive(t), g=dv.gasto;
-  const NA='<span class="na-tag">sem dado</span>';
   const s=salesOf(t);
   const steps=[
     ['Gasto Total', brl(g), [], false, 'hl-gasto'],
-    ['Impressões', intf(t.im), [['CPM',brl(dv.cpm)],['Frequência',NA]]],
+    ['Impressões', intf(t.im), [['CPM',brl(dv.cpm)]]],
     ['Cliques', intf(t.cl), [['CTR',pct(dv.ctr)],['CPC',brl(dv.cpc)]]],
     ['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]],
     ['Leads', intf(t.leads), [['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]],
@@ -901,7 +895,6 @@ function renderMeta(){
     ['Reuniões agendadas', intf(t.agendamentos), [['Tx‑Reunião',pct(s.txag)],['Custo/Reunião',brl(s.cpag)]]],
     ['Propostas enviadas', intf(t.propostas), [['Tx‑Proposta',pct(s.txprop)],['Custo/Proposta',brl(s.cpprop)]]],
     ['Vendas', intf(t.vendas), [['Tx‑Venda',pct(s.txvprop)],['CAC',brl(s.cac)]]],
-    ['Receita', brl(t.receita), [['ROAS',numf(s.roasReceita)],['Ticket',brl(s.tmReceita)]], false, 'hl-fat'],
     ['Faturamento', brl(t.fat), [['ROAS',numf(s.roas)],['Ticket',brl(s.tm)]], false, 'hl-fat'],
   ];
   document.getElementById('metaFunnel').innerHTML=funnelHTML(steps);
@@ -950,7 +943,7 @@ function renderMeta(){
     {key:'ag',label:'Reuniões',type:'int'},{key:'cpag',label:'C/Reunião',type:'brl'},
     {key:'pr',label:'Propostas',type:'int'},{key:'cppr',label:'C/Proposta',type:'brl'},
     {key:'convmql',label:'ConvMQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int'},{key:'cac',label:'CAC',type:'brl'},
-    {key:'fat',label:'Fat.',type:'brl'},{key:'receita',label:'Receita',type:'brl'},{key:'roas',label:'ROAS',type:'num'},
+    {key:'fat',label:'Fat.',type:'brl'},{key:'roas',label:'ROAS',type:'num'},
   ];
   function hierRows(map){ return Object.entries(map).map(([k,a])=>{const d=derive(a),s=salesOf(a);
     return {k, cells:{dim:k,gasto:d.gasto,cpm:d.cpm,ctr:d.ctr,cr:d.cr,convlp:d.convlp,leads:a.leads,cpl:d.cpl,tx:d.tx,mqls:a.mqls,cpmql:d.cpmql,
@@ -981,7 +974,7 @@ function renderMeta(){
   document.getElementById('qCount').textContent=q.length+' leads';
   renderTable({id:'tQual',
     cols:[{key:'d',label:'Data',type:'date'},{key:'nm',label:'Nome',type:'dim'},{key:'prof',label:'Profissão',type:'dim'},
-      {key:'bucket',label:'Faixa',type:'dim'},{key:'camp',label:'Campanha',type:'dim',big:true},{key:'em',label:'E‑mail',type:'dim',w:200},{key:'ph',label:'Telefone',type:'dim',w:110}],
+      {key:'bucket',label:'Faixa',type:'dim'},{key:'camp',label:'Campanha',type:'dim',big:true},{key:'ph',label:'Telefone',type:'dim',w:110}],
     rows:q.map((l,i)=>({k:'q'+i, cells:{d:l.d,nm:l.nm,prof:l.prof,bucket:l.bucket,camp:l.camp,em:l.em,ph:l.ph}}))});
 }
 
