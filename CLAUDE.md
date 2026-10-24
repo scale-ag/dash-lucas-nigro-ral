@@ -75,6 +75,27 @@ Não tem Ad ID, Content Views, Adds to Cart, Subscriptions, nem link de criativo
 — essas métricas aparecem "-"/"—" na dash. **Tem** Landing Page Views (ConvLP/CPV
 calculáveis, diferente do gap padrão do template genérico).
 
+**Aba "Seguidores IG"** (`SHEET_SEG`, mesma planilha da Meta) — campanha de
+**captação de seguidores** (`RAL | E1-DIST | … | TRFG …`; não aparece na Página1):
+`Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Link Clicks` ·
+`Amount Spent` (automáticos, Adveronix) · `Seguidores` (col. H, **à mão**: ganhos no
+dia) · `Custo por seguidor` (col. I, à mão — **ignorada**: a dash calcula gasto ÷
+seguidores, com o imposto). `build.py::build_followers()` → `DATA.seg[]`
+(`{d, camp, adset, ad, sp, im, cl, seg}`); célula de seguidores **vazia = não
+preenchido** (`seg: null`), diferente de **0**. Custo por seguidor só usa o gasto
+das linhas preenchidas (0 conta, vazio não); `app.js::addSeg()`. Linhas sem gasto,
+sem impressão e sem seguidor são puladas.
+
+**Separação das páginas (pedido de 24/10/2026):** Visão Geral (e o funil do
+Relatório) **soma tudo** — gasto/impressões/cliques de Página1 + Seguidores IG,
+com o card Gasto quebrado em Leads/Seguidores e o passo "Seguidores ganhos"; o CR
+usa só cliques das campanhas que medem Page View (`clpv`). **Captura Meta Ads** e
+Top/Piores = só campanhas de leads (Página1). **Funil Captação de Seguidores**
+(`renderSeg()`, `#seg`) = só a aba Seguidores IG: funil Gasto → Impressões →
+Cliques → Seguidores (Custo/Seguidor, Seg./Clique), evolução diária, tabela diária,
+seguidores e gasto por anúncio, hierarquia Campanha → Conjunto → Anúncio com filtro
+cruzado (`STATE.sSel*`). Os Insights de Tráfego continuam só com o funil de leads.
+
 URL de export CSV (por nome de aba): `https://docs.google.com/spreadsheets/d/<ID>/gviz/tq?tqx=out:csv&sheet=<nome>`
 
 ### Regra de Lead Qualificado (MQL)
@@ -237,8 +258,9 @@ python build/build.py --leads-file leads.csv --meta-file meta.csv --out dist/ind
 
 ## Especificação funcional (resumo)
 
-Quatro **páginas separadas** (sidebar) — a 4ª, **Captura ChatGPT Ads**, fica
-entre Meta Ads e Relatório (ver "ChatGPT Ads (utm_source)" acima):
+Cinco **páginas separadas** (sidebar): Visão Geral · Captura Meta Ads · **Funil
+Captação de Seguidores** (ver "Aba Seguidores IG" acima) · Captura ChatGPT Ads
+(ver "ChatGPT Ads (utm_source)") · Relatório:
 1. **Visão Geral de Leads** — funil vertical (Gasto → Impressões → Cliques → Leads →
    MQLs → Vendas/Faturamento) + KPIs secundários; gráfico combinado diário +
    tabela diária com heatmap (todos os leads); barras por origem/faixa/plataforma/profissão.

@@ -61,6 +61,10 @@ FUNNEL_START = "2026-08-28"
 # Planilha do Meta Ads (separada da planilha do Funil).
 SPREADSHEET_ID_META = "1xb5itNu9_No6keCKHyzG7qIPobT46BqfmJ_rP0v4h8c"
 SHEET_META = "Página 1"
+# Campanha de captação de seguidores (mesma planilha da Meta). Colunas da
+# Adveronix + 2 preenchidas à mão: Seguidores (ganhos no dia) e Custo por
+# seguidor (ignorada: a dash calcula gasto ÷ seguidores, com o imposto).
+SHEET_SEG = "Seguidores IG"
 # headers=1: sem ele o gviz funde o cabeçalho com a 1ª linha quando a aba tem
 # muitas colunas vazias (acontecia na Comercial_Leads).
 EXPORT_URL = "https://docs.google.com/spreadsheets/d/{sid}/gviz/tq?tqx=out:csv&headers=1&sheet={sheet}"
@@ -450,7 +454,45 @@ def build_commercial(com_leads_rows, com_etapas_rows, presenca_rows, id_attrib, 
     return out
 
 
-def process(leads_rows, meta_rows, sales_rows, com_leads_rows=None, com_etapas_rows=None, presenca_rows=None):
+def build_followers(seg_rows):
+    """Aba "Seguidores IG": [{d, camp, adset, ad, sp, im, cl, seg}] por dia/anúncio.
+    `seg` = seguidores ganhos (preenchido à mão); célula vazia = não preenchido
+    (None), diferente de 0 — o custo por seguidor só usa o gasto das linhas
+    preenchidas. Linhas sem gasto, sem impressão e sem seguidor são puladas."""
+    if not seg_rows:
+        return []
+    idx = header_index(
+        seg_rows[0],
+        {"day": ["day", "data"], "campaign": ["campaign name"], "adset": ["ad set name"], "ad": ["ad name"],
+         "impr": ["impressions"], "clicks": ["link clicks"], "spent": ["amount spent"], "seg": ["seguidores"]},
+        {"day": 0, "campaign": 1, "adset": 2, "ad": 3, "impr": 4, "clicks": 5, "spent": 6, "seg": 7},
+    )
+    out = []
+    for row in seg_rows[1:]:
+        d = parse_date(cell(row, idx["day"]))
+        if not d:
+            continue
+        raw = cell(row, idx["seg"])
+        seg = int(round(to_float(raw))) if raw else None
+        sp, im = round(to_float(cell(row, idx["spent"])), 4), to_float(cell(row, idx["impr"]))
+        if not sp and not im and not seg:
+            continue
+        out.append({
+            "d": d,
+            "camp": cell(row, idx["campaign"]) or "(sem campanha)",
+            "adset": cell(row, idx["adset"]) or "(sem conjunto)",
+            "ad": cell(row, idx["ad"]) or "(sem anúncio)",
+            "sp": sp, "im": im, "cl": to_float(cell(row, idx["clicks"])),
+            "seg": seg,
+        })
+    print(f"  seguidores: {len(out)} linhas | gasto R$ {sum(r['sp'] for r in out):,.2f} | "
+          f"seguidores {sum(r['seg'] or 0 for r in out)} | linhas sem preencher {sum(1 for r in out if r['seg'] is None)}",
+          file=sys.stderr)
+    return out
+
+
+def process(leads_rows, meta_rows, sales_rows, com_leads_rows=None, com_etapas_rows=None, presenca_rows=None,
+            seg_rows=None):
     lheader = leads_rows[0] if leads_rows else []
     lidx = header_index(
         lheader,
@@ -549,6 +591,7 @@ def process(leads_rows, meta_rows, sales_rows, com_leads_rows=None, com_etapas_r
 
     log_unmatched_sales(matched, len(purchases), unmatched)
     com = build_commercial(com_leads_rows, com_etapas_rows, presenca_rows, id_attrib, phone_attrib)
+    seg = build_followers(seg_rows)
 
     mheader = meta_rows[0] if meta_rows else []
     midx = header_index(
@@ -592,7 +635,7 @@ def process(leads_rows, meta_rows, sales_rows, com_leads_rows=None, com_etapas_r
 
     dates = sorted({d for d in (
         [l["d"] for l in leads if l["d"]] + [m["d"] for m in meta if m["d"]] + [s["d"] for s in sales if s["d"]]
-        + [c["d"] for c in com if c["d"]]
+        + [c["d"] for c in com if c["d"]] + [r["d"] for r in seg]
     )})
     now_brt = datetime.now(BRT)
     return {
@@ -618,6 +661,8 @@ def process(leads_rows, meta_rows, sales_rows, com_leads_rows=None, com_etapas_r
         "sales": sales,
         # Agendamentos/propostas do CRM comercial (build_commercial).
         "com": com,
+        # Campanha de captação de seguidores (aba Seguidores IG).
+        "seg": seg,
         # Anúncio -> permalink do criativo (aba Relatório).
         "ad_links": ad_links,
         # Insights de Tráfego (texto pré-escrito, lido de relatorios.json). Preenchido
@@ -680,6 +725,7 @@ def main():
     ap.add_argument("--com-leads-file", help="CSV local da aba Comercial_Leads")
     ap.add_argument("--com-etapas-file", help="CSV local da aba Comercial_Etapas")
     ap.add_argument("--presenca-file", help="CSV local da aba Comercial_Presenca")
+    ap.add_argument("--seg-file", help="CSV local da aba Seguidores IG (planilha da Meta)")
     ap.add_argument("--template", default="build/template.html")
     ap.add_argument("--out", default="dist/index.html")
     args = ap.parse_args()
@@ -690,8 +736,9 @@ def main():
     com_leads_rows = load_rows(sheet_url(SPREADSHEET_ID_FUNIL, SHEET_COM_LEADS), args.com_leads_file)
     com_etapas_rows = load_rows(sheet_url(SPREADSHEET_ID_FUNIL, SHEET_COM_ETAPAS), args.com_etapas_file)
     presenca_rows = load_rows(sheet_url(SPREADSHEET_ID_FUNIL, SHEET_COM_PRESENCA), args.presenca_file)
+    seg_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_SEG), args.seg_file)
 
-    data = process(leads_rows, meta_rows, sales_rows, com_leads_rows, com_etapas_rows, presenca_rows)
+    data = process(leads_rows, meta_rows, sales_rows, com_leads_rows, com_etapas_rows, presenca_rows, seg_rows)
 
     # Insights de Tráfego (texto pré-escrito) — lidos do arquivo versionado ao
     # lado do template. Sem chamada de API no build.
