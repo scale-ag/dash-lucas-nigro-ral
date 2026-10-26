@@ -32,6 +32,7 @@ const STATE = {
   selDays:new Set(),
   mSelC:new Set(), mSelA:new Set(), mSelAd:new Set(),
   sSelC:new Set(), sSelA:new Set(), sSelAd:new Set(),
+  gSelC:new Set(), gSelA:new Set(), gSelAd:new Set(),
   sort:{}, colw: JSON.parse(localStorage.getItem('dm_colw')||'{}'),
 };
 const taxf = ()=> STATE.tax ? TAX : 1;
@@ -993,6 +994,102 @@ function renderMeta(){
     rows:q.map((l,i)=>({k:'q'+i, cells:{d:l.d,nm:l.nm,prof:l.prof,bucket:l.bucket,camp:l.camp,em:l.em,ph:l.ph}}))});
 }
 
+/* ---------------- PAGE: Captura ChatGPT Ads ----------------
+   Só leads com utm_source "chatgpt*" (src==='chatgpt' em build.py). Não há
+   planilha de gasto do ChatGPT Ads: tudo aqui é volume (Leads → MQLs → Vendas),
+   sem CPL/CPMQL/CAC. */
+const isGpt = r=>r.src==='chatgpt';
+function gptScope(ex){ let fL=leadsActive().filter(isGpt), fS=salesActive().filter(isGpt);
+  const f=(set,dim)=>{ fL=fL.filter(r=>set.has(r[dim])); fS=fS.filter(r=>set.has(r[dim])); };
+  if(ex!=='C'&&STATE.gSelC.size) f(STATE.gSelC,'camp');
+  if(ex!=='A'&&STATE.gSelA.size) f(STATE.gSelA,'adset');
+  if(ex!=='D'&&STATE.gSelAd.size) f(STATE.gSelAd,'ad');
+  return {fL,fS}; }
+function selGpt(dim,key,ctrl){
+  const sets={C:STATE.gSelC,A:STATE.gSelA,D:STATE.gSelAd}, s=sets[dim];
+  if(ctrl){ s.has(key)?s.delete(key):s.add(key); }
+  else { const sole=s.has(key)&&s.size===1&&!Object.entries(sets).some(([k2,x])=>k2!==dim&&x.size);
+    Object.values(sets).forEach(x=>x.clear()); if(!sole) s.add(key); }
+  renderGpt();
+}
+function leadsBarChart(id, d){
+  destroy(id); const el=document.getElementById(id); if(!el) return;
+  const mut=cmuted();
+  charts[id]=new Chart(el,{type:'bar',
+    data:{labels:d.map(x=>x.d.slice(5)), datasets:[
+      {label:'Leads',data:d.map(x=>x.leads),backgroundColor:cvar('--chart-leads'),borderRadius:3},
+      {label:'MQLs',data:d.map(x=>x.mqls),backgroundColor:cvar('--chart-mqls'),borderRadius:3},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:cink(),boxWidth:10,usePointStyle:true,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+intf(c.raw)}}},
+      scales:{x:{ticks:{color:mut,font:{size:10}},grid:{display:false}},
+        y:{beginAtZero:true,ticks:{color:mut,precision:0,font:{size:10}},grid:{color:cgrid()}}}}});
+}
+function renderGpt(){
+  const F=gptScope(null), fL=F.fL, fS=F.fS;
+  const t=totals(fL,[],fS), s=salesOf(t);
+  const allLeads=leadsActive().length;
+  const tx=t.leads?t.mqls/t.leads:null;
+  const NA='<span class="na-tag">sem dado</span>';
+  const steps=[
+    ['Leads ChatGPT Ads', intf(t.leads), [['% do total',pct(allLeads?t.leads/allLeads:null)],['CPL',NA]]],
+    ['MQLs (Qualificados)', intf(t.mqls), [['Tx‑MQL',pct(tx)],['CPMQL',NA]], false, 'hl-mql'],
+    ['Reuniões agendadas', intf(t.agendamentos), [['Tx‑Reunião',pct(s.txag)],['Custo/Reunião',NA]]],
+    ['Propostas enviadas', intf(t.propostas), [['Tx‑Proposta',pct(s.txprop)],['Custo/Proposta',NA]]],
+    ['Vendas', s.vendas!=null?intf(s.vendas):'0', [['ConvMQL',s.convmql!=null?pct(s.convmql):'-'],['CAC',NA]]],
+    ['Faturamento', s.fat!=null?brl(s.fat):brl(0), [['Ticket',s.tm!=null?brl(s.tm):'-']], false, 'hl-fat'],
+  ];
+  document.getElementById('gptFunnel').innerHTML=funnelHTML(steps);
+
+  const dd=daily(fL,[],fS);
+  leadsBarChart('gptCombo', dd);
+  const gcols=[
+    {key:'date',label:'Data',type:'date'},{key:'wd',label:'Dia',type:'dim',w:70},
+    {key:'leads',label:'Leads',type:'int',heat:'leads'},{key:'mqls',label:'MQLs',type:'int',heat:'mqls'},
+    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'ag',label:'Reuniões',type:'int'},{key:'pr',label:'Propostas',type:'int'},
+    {key:'vendas',label:'Vendas',type:'int',heat:'vendas'},
+    {key:'convmql',label:'ConvMQL',type:'pct'},{key:'fat',label:'Fat.',type:'brl'},
+  ];
+  const dayCells=(x,isTotal)=>{const ss=salesOf(x); return {date:isTotal?null:x.d, wd:isTotal?'':weekday(x.d),
+    leads:x.leads, mqls:x.mqls, tx:x.leads?x.mqls/x.leads:null, ag:x.agendamentos, pr:x.propostas, vendas:ss.vendas, convmql:ss.convmql, fat:ss.fat};};
+  renderTable({id:'gptDaily', cols:gcols, center:true,
+    rows:dd.slice().reverse().map(x=>({k:x.d, cells:dayCells(x)})),
+    total:dayCells({...t,d:null},true),
+    selectable:true, selSet:STATE.selDays,
+    onSelect:(k,e)=>{ toggleSet(STATE.selDays,k,e&&(e.ctrlKey||e.metaKey)); syncDateInputs(); renderAll(); },
+  });
+
+  const byAd={}; fL.forEach(l=>{ const a=byAd[l.ad]||(byAd[l.ad]={label:l.ad,leads:0,mqls:0}); a.leads++; a.mqls+=l.q; });
+  hbar('gptLeadsAd', Object.values(byAd), x=>x.leads, ()=>cvar('--chart-leads'), 10);
+  hbar('gptMqlAd', Object.values(byAd), x=>x.mqls, ()=>cvar('--chart-mqls'), 10, 'MQLs');
+  donutQlf('gptQlfDonut', t.mqls, t.leads, 'gptQlfPct');
+
+  const hcols=[
+    {key:'dim',label:'',type:'dim',big:true},{key:'leads',label:'Leads',type:'int'},{key:'mqls',label:'MQLs',type:'int'},
+    {key:'tx',label:'Tx‑MQL',type:'pct'},{key:'ag',label:'Reuniões',type:'int'},{key:'pr',label:'Propostas',type:'int'},
+    {key:'vendas',label:'Vendas',type:'int'},{key:'convmql',label:'ConvMQL',type:'pct'},
+    {key:'fat',label:'Fat.',type:'brl'},
+  ];
+  const cellsOf=(k,a)=>{const ss=salesOf(a); return {dim:k,leads:a.leads,mqls:a.mqls,tx:a.leads?a.mqls/a.leads:null,ag:a.agendamentos,pr:a.propostas,
+    vendas:ss.vendas,convmql:ss.convmql,fat:ss.fat};};
+  [['C','camp','gptCamp','Campanha',STATE.gSelC],['A','adset','gptAdset','Conjunto',STATE.gSelA],['D','ad','gptAd','Anúncio',STATE.gSelAd]]
+    .forEach(([dc,dim,id,label,set])=>{
+      const S=gptScope(dc), agg=buildAgg(S.fL,[],S.fS,dim);
+      renderTable({id, cols:hcols.map((c,i)=>i===0?{...c,label}:c),
+        rows:Object.entries(agg).map(([k,a])=>({k, cells:cellsOf(k,a)})),
+        total:cellsOf(null,totals(S.fL,[],S.fS)),
+        selectable:true, selSet:set, onSelect:(k,e)=>selGpt(dc,k,e&&(e.ctrlKey||e.metaKey))});
+    });
+
+  const q=fL.filter(l=>l.q).sort((a,b)=>(a.d<b.d?1:-1));
+  document.getElementById('gptQCount').textContent=q.length+' leads';
+  renderTable({id:'gptQual',
+    cols:[{key:'d',label:'Data',type:'date'},{key:'nm',label:'Nome',type:'dim'},{key:'prof',label:'Perfil',type:'dim'},
+      {key:'camp',label:'Campanha',type:'dim',big:true},{key:'ad',label:'Anúncio',type:'dim'},{key:'ph',label:'Telefone',type:'dim',w:110}],
+    rows:q.map((l,i)=>({k:'gq'+i, cells:{d:l.d,nm:l.nm,prof:l.prof,camp:l.camp,ad:l.ad,ph:l.ph}}))});
+}
+
 /* ---------------- PAGE: Funil Captação de Seguidores ----------------
    Só a campanha de seguidores (aba Seguidores IG). Gasto/impressões/cliques vêm
    da Adveronix; seguidores são preenchidos à mão (vazio = não preenchido). */
@@ -1156,19 +1253,20 @@ function ppApply(){
 }
 
 /* ---------------- navigation & boot ---------------- */
-const PAGE_TITLES={geral:'Visão Geral', meta:'Funil de Leads (Meta Ads)', seg:'Funil Captação de Seguidores', rel:'Relatório'};
+const PAGE_TITLES={geral:'Visão Geral', meta:'Funil de Leads (Meta Ads)', seg:'Funil Captação de Seguidores', rel:'Relatório', gpt:'Funil de Leads (ChatGPT Ads)'};
 function setPage(p){ STATE.page=p;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.page===p));
   document.getElementById('page-geral').classList.toggle('active',p==='geral');
   document.getElementById('page-meta').classList.toggle('active',p==='meta');
   document.getElementById('page-seg').classList.toggle('active',p==='seg');
+  document.getElementById('page-gpt').classList.toggle('active',p==='gpt');
   document.getElementById('page-rel').classList.toggle('active',p==='rel');
   document.getElementById('ptitle').textContent = PAGE_TITLES[p];
   document.getElementById('navToggle').checked=false;
   history.replaceState(null,'', '#'+p);
   renderAll();
 }
-function renderAll(){ if(STATE.page==='meta') renderMeta(); else if(STATE.page==='seg') renderSeg(); else if(STATE.page==='rel') renderRelatorio(); else renderGeral(); }
+function renderAll(){ if(STATE.page==='meta') renderMeta(); else if(STATE.page==='seg') renderSeg(); else if(STATE.page==='gpt') renderGpt(); else if(STATE.page==='rel') renderRelatorio(); else renderGeral(); }
 
 function applyTheme(){ const t=localStorage.getItem('dm_theme'); if(t==='light') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme','dark'); }
 applyTheme();
@@ -1183,7 +1281,7 @@ document.getElementById('ppCancel').addEventListener('click',ppClose);
 document.getElementById('periodPop').addEventListener('click',e=>e.stopPropagation());
 document.addEventListener('click',()=>{ if(ppIsOpen()) ppClose(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&ppIsOpen()) ppClose(); });
-document.getElementById('clearBtn').addEventListener('click',()=>{ STATE.mSelC.clear();STATE.mSelA.clear();STATE.mSelAd.clear();STATE.sSelC.clear();STATE.sSelA.clear();STATE.sSelAd.clear();STATE.selDays.clear(); applyPreset('mes'); });
+document.getElementById('clearBtn').addEventListener('click',()=>{ STATE.mSelC.clear();STATE.mSelA.clear();STATE.mSelAd.clear();STATE.sSelC.clear();STATE.sSelA.clear();STATE.sSelAd.clear();STATE.gSelC.clear();STATE.gSelA.clear();STATE.gSelAd.clear();STATE.selDays.clear(); applyPreset('mes'); });
 document.getElementById('refreshBtn').addEventListener('click',function(){ this.classList.add('loading'); location.href=location.pathname+'?t='+Date.now()+location.hash; });
 
 /* painel de Metas & parâmetros — edita ao vivo, salva em localStorage e recolore

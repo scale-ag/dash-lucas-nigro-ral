@@ -258,11 +258,11 @@ python build/build.py --leads-file leads.csv --meta-file meta.csv --out dist/ind
 
 ## Especificação funcional (resumo)
 
-Quatro **páginas** no menu, agrupado por seção como no dash Partiu Empreender
+Cinco **páginas** no menu, agrupado por seção como no dash Partiu Empreender
 (26/10/2026): Geral → Visão Geral · Captação de Leads → Funil de Leads (Meta Ads)
-· Captação de Seguidores → Funil Captação de Seguidores · Relatório. A página
-própria do ChatGPT Ads foi **removida** a pedido do cliente (os leads ChatGPT
-seguem contando na Visão Geral). Gráfico combinado diário no padrão Partiu:
+· Captação de Seguidores → Funil Captação de Seguidores · Relatório · ChatGPT Ads →
+Funil de Leads (ChatGPT Ads) — **por último**, a pedido do cliente. Gráfico
+combinado diário no padrão Partiu:
 1 série de barras (MQLs) + linhas Gasto e CPMQL.
 1. **Visão Geral de Leads** — funil vertical (Gasto → Impressões → Cliques → Leads →
    MQLs → Vendas/Faturamento) + KPIs secundários; gráfico combinado diário +
