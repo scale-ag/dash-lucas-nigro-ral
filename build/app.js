@@ -1255,7 +1255,7 @@ function ppApply(){
 }
 
 /* ---------------- navigation & boot ---------------- */
-const PAGE_TITLES={geral:'Visão Geral', meta:'Captura Meta Ads', seg:'Funil Captação de Seguidores', gpt:'Captura ChatGPT Ads', rel:'Relatório'};
+const PAGE_TITLES={geral:'Visão Geral', meta:'Funil de Leads (Meta Ads)', seg:'Funil Captação de Seguidores', gpt:'Funil de Leads (ChatGPT Ads)', rel:'Relatório'};
 function setPage(p){ STATE.page=p;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.page===p));
   document.getElementById('page-geral').classList.toggle('active',p==='geral');
